@@ -1,95 +1,166 @@
 # Design
 
-## Scope of the first alpha
+## Components and command boundary
 
-The core CLI is independently useful without a running shell. The QML widget
-uses its JSON output and has no write operations. This keeps desktop integration
-separate from merge correctness.
+The Python CLI is independently usable without a running desktop. The native QML
+panel invokes it with argv arrays and consumes JSON; no user text is interpolated
+into shell commands. The UI keeps a reviewed candidate and plan fingerprint for
+its explicit apply confirmation.
 
-Commands:
+| Module | Responsibility |
+| --- | --- |
+| core.py | Source layouts, canonical trees, baselines, diffs and three-way merges |
+| plans.py | Persistent review snapshots and conflict choices |
+| validation.py | Optional Qt 6 syntax checking without executing candidate code |
+| transactions.py | Locks, metadata-preserving snapshots, atomic swaps, undo and recovery |
+| service.py | Creation, tracking, status, history and bounded shell IPC |
+| cli.py | Human/JSON command boundary |
+| KeeperController.qml | Process lifecycle, review state and confirmation actions |
+| KeeperView.qml and page components | Native clone, creation, review and history views |
 
-| Command | Reads | Writes |
-| --- | --- | --- |
-| `status` | Source manifests, clones, existing baselines | Nothing |
-| `track` | Clone plus verified current source or supplied original | New baseline record |
-| `preview` | Baseline, clone, current source | Temporary merge inputs only |
-| `export` | Same inputs as preview | New review directory |
+All commands accept --json. Runtime errors return nonzero and include structured
+JSON when requested; argument-parser usage errors are plain stderr diagnostics.
+A successfully inspected plan may contain conflicts or validation
+errors; callers must inspect hasConflicts, stale and validation.valid.
 
-`--json` sends structured results to stdout. Failures return nonzero with a useful
-stderr message. A preview containing merge conflicts is still a successful
-inspection and returns zero; inspect `hasConflicts` and `validation.valid`.
+## Source layouts and identity
 
-## Source layouts
+Discovery mirrors the installed catalog's manifest depth. Directory manifests
+read a whole standalone plugin. Flat *.manifest.json sources materialize entry
+points and clonePaths in target order; mapped source paths may reference siblings
+inside the built-in source tree. Text references follow native clone layout rules.
+Symlinks and special files are rejected; Git metadata is ignored for comparison.
 
-The installed `omarchy-plugin-catalog` discovers manifests at depths two through
-four below `shell/plugins`. Clone Keeper mirrors that scope directly so it can
-also inspect supplied fixture trees without shell IPC or invoking live commands.
-
-For a standard `manifest.json`, copy the whole source tree into memory. For a flat
-`*.manifest.json`, materialize declared entry points and `omarchy.clonePaths` in
-target-name order. Mapped sources may reference sibling directories, but must
-remain inside the built-in plugin tree. Targets must remain inside the candidate.
-Text references are adjusted to match the native clone layout.
-
-Unlike native `cp -aL`, the alpha rejects symlinks instead of dereferencing them.
-This is an explicit compatibility limit. `.git` metadata is ignored.
+Manifests are canonicalized as JSON before comparisons. The captured clone ID,
+name and bar label normalize upstream manifests to the clone's identity. Later
+local name changes remain merge inputs. Built-in IDs inside QML remain unchanged
+to preserve Omarchy's clone IPC routing. Other manifest fields merge as text;
+there is no semantic QML or JSON merge.
 
 ## Baseline provenance
 
-An unchanged clone can be verified against the current built-in after normalizing
-generated clone identity fields. Its record says `verified-current-source`.
-Already modified clones require a user-supplied original; their provenance says
-`user-supplied-original`. Neither version labels nor file modification times prove
-ancestry.
+State lives at clones/<id>/record.json alongside baseline/. Records contain IDs,
+identity, capture time, version context, provenance, per-file hashes/modes and an
+aggregate hash. Every baseline read verifies its inventory.
 
-Each record lives at `state/clones/<id>/record.json`, alongside a `baseline/`
-directory. It contains the clone/source IDs, capture time, baseline version label,
-the normalized identity, every file's SHA-256 and mode, and an aggregate hash.
-Reads verify the inventory before using a saved baseline.
+- created-from-source: clone creation records the ancestor before publication.
+- verified-current-source: an unchanged existing clone matches current source.
+- user-supplied-original: the owner supplies its known historical ancestor.
+- applied-plan: a reviewed apply advances the ancestor to that plan's upstream.
 
-The captured clone ID, display name and bar label are applied to upstream source
-manifests for comparison. Later local name changes remain actual merge inputs.
-The built-in identifiers inside QML are left unchanged, preserving Omarchy's
-clone IPC routing. All other manifest fields participate in the merge.
+Version labels and modification times never establish ancestry. Repeated tracking
+refuses to replace an existing record.
 
-## Merge semantics
+Creation saves a verified baseline with creationPending=true, then publishes the
+complete new clone with Linux RENAME_NOREPLACE, then clears the marker atomically.
+Missing parent entries, files and containing directories are fsynced before
+publication. Recovery can finish after any boundary. A pre-existing conflicting
+clone is preserved; it must exactly match the saved creation to be accepted.
+IDs already referenced in shell configuration are refused so a newly created
+clone cannot silently become enabled. Normal creation stays disabled.
 
-For each path in the union of the three trees:
+## Three-way merging and review
 
-1. Identical local/upstream results are accepted.
-2. If one side equals the baseline, take the other side, including a deletion.
-3. Concurrent text changes use `git merge-file --diff3` with readable labels.
-4. Different concurrent additions, delete/modify, and binary divergence conflict.
-5. Permission changes are merged independently from content changes.
+For each path in the union of original, local and upstream trees:
 
-Manifest JSON is canonicalized before comparison, then merged as text. Adjacent
-independent JSON edits can therefore require manual review. The alpha does not
-attempt semantic QML or JSON merges.
+1. Equal local/upstream results are accepted.
+2. If one side equals the original, accept the other side, including deletion.
+3. Concurrent text edits use git merge-file --diff3.
+4. Concurrent additions, delete/modify and binary divergence require resolution.
+5. Ordinary permission changes merge independently from file contents.
 
-The preview includes baseline-to-local, baseline-to-upstream, and local-to-candidate
-diffs. Large displayed diffs are truncated; candidate contents remain complete.
-Manifest validation checks schema, required fields, clone identity, entry points,
-layout collisions, and bar placement. It does not prove the resulting QML runs.
+Plans at plans/<uuid>/ retain immutable base, local and upstream snapshots, plus
+an editable candidate, record.json and resolutions.json. Saved plan reads verify
+immutable hashes and the configured clone path. Reviews show three diffs: original
+to local, original to upstream, and local to candidate. Displayed diffs can be
+truncated; full candidate files remain available.
 
-## Export boundaries
+File/directory collisions resolve as a path family. Choices are local, upstream,
+original, deletion, an external replacement file, or an edited candidate. Resolution
+hashes bind each conflict to its accepted file family; editing it again invalidates
+the acceptance. Candidate updates use a whole-directory exchange. A crash before
+the resolution record leaves an unresolved choice, not an accepted unknown result.
 
-Export recalculates a candidate, refuses conflicts and invalid structure, and
-rechecks the clone, upstream, and baseline hashes before writing. The output is a new directory outside
-managed trees. Files are staged privately, then published with an exclusive
-directory reservation. Baseline state is never advanced by an export.
+Structural validation checks schema, required fields, entry points, identity,
+layout and bar placement. Conflict markers block apply. Qt 6 qmllint optionally
+checks actual parse failures, without importing or executing candidate code.
+Dynamic-host type warnings are not runtime validation. A missing linter is reported
+explicitly. Failed/incomplete linter execution blocks review rather than implying
+success.
 
-The alpha assumes the user's files are not being maliciously replaced by another
-process during inspection. It rejects detected symlinks and uses `O_NOFOLLOW`
-for file reads; it is not a sandbox against other code running as the same user.
+Reviews compare current clone, baseline and upstream hashes with their snapshots
+and mark changed inputs stale. Apply requires the candidate hash the user reviewed;
+the panel additionally supplies a plan metadata hash.
 
-## Future apply transaction
+## Apply transaction
 
-Applying needs a separate design because Omarchy reloads watched plugin files.
-A correct implementation must stage the whole validated candidate, recheck local,
-baseline, and upstream hashes, retain the original tree, commit without exposing
-a partial directory, and advance the baseline to the *new upstream*, not the
-merged local result. A persistent journal must permit recovery after interruption.
-Undo must refuse to overwrite edits made after the apply operation.
+Per-clone flock locks serialize Clone Keeper writers. Omarchy source, installed
+plugins and state must be separate trees. The implementation assumes a normal
+single-user environment, not a sandbox against other processes with the same
+permissions. It detects concurrent editor changes at the commit boundaries.
 
-These requirements are release work, not promises made by the current export
-command. No alpha UI button implies that changes have been applied.
+Before durable intent:
+
+1. Reload and validate the plan, resolutions, candidate hash and optional plan hash.
+2. Reject unfinished operations; recheck clone, source and baseline.
+3. Capture exact before-clone and before-state snapshots.
+4. Build after-clone from the candidate and after-state from **upstream**.
+5. Validate supported metadata and atomic-exchange capability.
+6. Save and fsync all snapshots; recheck live inputs and the review.
+
+Transaction journals live at transactions/<clone>/<uuid>/. They retain immutable
+before-clone, before-state, after-clone and after-state inventories. Snapshot
+hashes include ordinary file modes, directory modes and empty directories. Undo
+restores exact pre-apply bytes, including noncanonical manifest formatting.
+
+Git metadata, hardlinks, special file mode bits, xattrs/ACLs, symlinks and special files
+are refused on apply because this version cannot preserve them faithfully.
+Ordinary binary files and executable modes are supported. Ownership and timestamps
+are not captured; snapshots and replacements are created as the current user.
+
+The new clone stages beside the installed plugins directory, outside its watched
+children; the new baseline stages under state/.staging. Linux RENAME_EXCHANGE
+swaps each complete directory. Live clone and baseline swaps are individually
+atomic; their combination is journaled and recoverable, not a single filesystem
+transaction. Clone and baseline may temporarily represent different steps after
+a crash. Further mutation is blocked until recovery.
+
+Journal states:
+```text
+prepared → apply-clone → apply-state → applied
+applied → undo-prepared → undo-clone → undo-state → undone
+```
+
+Recovery inspects actual live and displaced hashes, including interruption after
+a swap but before its journal update. It finishes the intended operation only
+when both live trees and all backups are recognized. Unknown edits or damaged
+backups are left for inspection. Undo validates the latest applied transaction's
+after-state before writing its own intent, then restores both before snapshots.
+
+Completed journals and staging directories are retained. There is no automatic
+pruning, selective undo, force overwrite, or redo command in this version.
+
+## Shell integration
+
+After live mutations, a rescan request lets Omarchy reload enabled clones. The
+current shell unloads all plugin widgets and panels, including Clone Keeper, so
+its panel can close before the child process response is displayed. All durable
+state changes finish before the rescan request; reopening reconstructs status.
+A transport failure is a warning on an otherwise successful saved operation.
+Custom plugin roots never issue live shell mutations.
+
+Enable is separate and explicit. It checks pending operations under the clone
+lock, requests a rescan, polls read-only registry discovery, and sends exactly
+one enable request after the ID appears. The entire IPC interval has an eight-
+second deadline. An unconfirmed activation is not reported as definitely disabled.
+
+No automatic update applies, no network requests, no sudo and no candidate code
+execution occur in the maintenance engine. Plugin execution begins through normal
+Omarchy enable/reload behavior.
+
+## Legacy preview/export
+
+Preview remains an ephemeral three-way inspection. Export refuses conflicts and
+structural errors, rechecks inputs and publishes a new directory outside managed
+trees; neither command changes ancestry. Export does not perform the saved
+review's optional syntax check.

@@ -32,7 +32,7 @@ ln -s -- "$shell_dir" "$import_dir/qs"
 
 "$lint" --version
 "$lint" --ignore-settings -I "$import_dir" \
-  "$project_dir/BarWidget.qml" "$project_dir/Panel.qml"
+  "$project_dir"/*.qml
 # No warning suppression or exit-code masking: Qt 6 returns failure on errors.
 # It also prints type warnings for the host's dynamic QObject APIs.
 omarchy-plugin-validate "$project_dir"

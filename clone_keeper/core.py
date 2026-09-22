@@ -160,33 +160,39 @@ def write_tree(root: Path, tree: Tree) -> None:
 
 
 def atomic_new_tree(destination: Path, tree: Tree) -> None:
-    """Publish a new directory; never replace even an existing empty directory.
-
-    mkdir is the exclusive reservation. Export failures remove only the directory
-    this invocation created. Staged contents are complete before publication.
-    """
+    """Publish a complete durable directory without an empty reservation window."""
+    from .transactions import _fsync_directory, publish_directory
     no_symlink_path(destination)
     if destination.exists():
         raise KeeperError(f"Destination already exists: {destination}")
-    destination.parent.mkdir(parents=True, exist_ok=True)
+    # Create one level at a time so an existing file or a symlink substituted by
+    # another writer cannot silently become part of our destination hierarchy.
+    missing = []
+    parent = destination.parent
+    while not parent.exists():
+        missing.append(parent)
+        parent = parent.parent
+    no_symlink_path(parent)
+    if not parent.is_dir():
+        raise KeeperError(f"Destination parent is not a directory: {parent}")
+    for directory in reversed(missing):
+        no_symlink_path(directory)
+        try:
+            directory.mkdir()
+        except FileExistsError:
+            no_symlink_path(directory)
+            if not directory.is_dir():
+                raise KeeperError(f"Destination parent is not a directory: {directory}")
+    # Persist every ancestor entry before publication. The existing part of the
+    # chain matters too: callers may have just created state_dir themselves.
+    for directory in (destination.parent, *destination.parent.parents):
+        no_symlink_path(directory)
+        _fsync_directory(directory)
     with tempfile.TemporaryDirectory(prefix=".clone-keeper-", dir=destination.parent) as tmp:
         stage = Path(tmp) / "tree"
         stage.mkdir(mode=0o700)
         write_tree(stage, tree)
-        try:
-            destination.mkdir(mode=0o700)
-        except FileExistsError as exc:
-            raise KeeperError(f"Destination already exists: {destination}") from exc
-        try:
-            # Replaces only our just-created empty reservation. A concurrently
-            # populated directory causes rename to fail, never to delete its data.
-            stage.rename(destination)
-        except BaseException:
-            try:
-                destination.rmdir()
-            except OSError:
-                pass
-            raise
+        publish_directory(stage, destination)
 
 
 @dataclass

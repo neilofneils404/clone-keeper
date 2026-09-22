@@ -1,0 +1,9 @@
+include AGENTS.md CHANGELOG.md LICENSE README.md MANIFEST.in pyproject.toml
+include .gitignore manifest.json *.qml
+include bin/clone-keeper
+recursive-include clone_keeper *.py
+recursive-include tests *.py
+recursive-include scripts *.py *.sh
+recursive-include docs *.md *.png
+recursive-include .github *.yml *.yaml
+global-exclude *.py[cod] __pycache__ .DS_Store

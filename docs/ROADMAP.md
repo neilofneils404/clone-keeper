@@ -1,41 +1,34 @@
 # Roadmap
 
-## Local alpha — implemented
+## 0.2.0 local beta — implemented
 
-- Native clone discovery and source-layout normalization.
-- Immutable baselines with recorded provenance and content hashes.
-- Local/upstream change detection.
-- Three-way preview with text, binary, delete/modify and mode handling.
-- Conflict-free candidate export and structural validation.
-- Read-only native panel with local, upstream, and proposed-merge diff views,
-  CLI integration tests, and CI configuration.
+- Directory and flat built-in source discovery, normalization and identity.
+- Immutable, verifiable baselines with explicit provenance.
+- Assisted disabled clone creation with ancestry captured first.
+- Existing-clone tracking from current or historical original source.
+- Persistent reviews, file navigation and three separate diff views.
+- Text, binary, deletion, permission and file/directory conflict handling.
+- Explicit side selection, replacement files and manual candidate editing.
+- Stale-input detection, reviewed fingerprints and optional Qt 6 syntax checks.
+- Atomic whole-directory apply, baseline advancement, durable undo and recovery.
+- Native clone/create/review/history panel and bundled standalone CLI.
+- Isolated end-to-end, interruption, corruption and metadata tests.
+- Disposable command-line demo, UI smoke harness and CI.
 
-## Next: complete the maintenance loop
+## Public release
 
-1. Make baseline capture available from the panel, explaining historical sources.
-2. Add an assisted new-clone workflow that records ancestry at creation time.
-3. Design and test journaled apply/undo, including interruption and stale previews.
-4. Advance the baseline to the new upstream after successful application.
-5. Add conflict-resolution staging with an external editor and explicit validation.
-6. Add a dedicated file navigator for larger multi-file previews.
+See [the release checklist](RELEASE.md). Finish a disposable desktop pilot covering
+actual installation, popup interaction, scaling, horizontal/vertical and replacement
+bar placement, disable/re-enable, update and removal. Capture authentic release
+screenshots, then publish GitHub and submit the marketplace listing.
 
-## Before GitHub release and marketplace submission
+## Later, driven by use
 
-- Review the current official plugin submission and registry requirements.
-- Verify the complete workflow in a disposable real Omarchy desktop: startup,
-  native bar, replacement bars where supported, vertical layouts, text scaling,
-  keyboard access, disable/re-enable, update and removal.
-- Test apply/undo on several representative clones and malformed/crash scenarios.
-- Add authentic screenshots and a short demonstration; do not present fixtures as
-  screenshots of a production-ready release.
-- Finalize repository name, namespace, release notes and supported versions.
-- Publish the repository and submit its reviewed commit to the marketplace.
+- Help locate original source from historical Omarchy releases.
+- Reviewable retention/pruning for old plans, backups and staging directories.
+- Explicit provenance for selected third-party forks.
+- Contribute original source revision metadata to Omarchy's clone command.
+- Optional update notifications with clear freshness and no automatic application.
+- Richer semantic manifest merging if real conflicts justify it.
 
-## Later
-
-- Assist with locating original baselines in historical Omarchy releases.
-- Support selected third-party plugin forks with explicit upstream provenance.
-- Contribute source-revision metadata to Omarchy's native clone command.
-- Optional update notifications with explicit freshness and minimal background work.
-
-No GitHub remote or marketplace listing is created by the local alpha workflow.
+No cloud service or background auto-merge is planned.

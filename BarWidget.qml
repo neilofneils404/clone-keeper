@@ -9,6 +9,7 @@ Ui.BarWidget {
   readonly property bool opened: panelLoader.item ? panelLoader.item.opened : false
   readonly property bool popoutSwitchClosing: panelLoader.item ? panelLoader.item.popoutSwitchClosing : false
   readonly property int updateCount: panelLoader.item ? panelLoader.item.updateCount : 0
+  readonly property int attentionCount: panelLoader.item ? panelLoader.item.attentionCount : 0
 
   function open() { if (panelLoader.item) panelLoader.item.open() }
   function close() { if (panelLoader.item) panelLoader.item.close() }
@@ -47,8 +48,8 @@ Ui.BarWidget {
     bar: root.bar
     slotSize: Style.bar.statusSlot
     text: "󰆏"
-    active: root.updateCount > 0
-    tooltipText: root.updateCount > 0
+    active: root.updateCount > 0 || root.attentionCount > 0
+    tooltipText: root.attentionCount > 0 ? "Clone Keeper · A clone needs attention" : root.updateCount > 0
       ? "Clone Keeper · " + root.updateCount + " clone(s) have upstream changes"
       : "Clone Keeper · Review your customized plugins"
     onPressed: function(mouseButton) {

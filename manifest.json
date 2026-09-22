@@ -2,15 +2,15 @@
   "schemaVersion": 1,
   "id": "neil.clone-keeper",
   "name": "Clone Keeper",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": "neilofneils404",
   "license": "MIT",
-  "description": "Track customized Omarchy plugins and preview upstream changes against a saved baseline.",
+  "description": "Maintain customized Omarchy plugins with saved baselines, reviewed merges, conflict resolution and undo.",
   "kinds": ["bar-widget"],
   "entryPoints": { "barWidget": "BarWidget.qml" },
   "barWidget": {
     "displayName": "Clone Keeper",
-    "description": "Review your cloned plugins and preview three-way merges.",
+    "description": "Create tracked clones, review upstream changes, resolve conflicts and restore previous versions.",
     "category": "System",
     "allowMultiple": false,
     "defaultSection": "right"

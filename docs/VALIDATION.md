@@ -1,38 +1,95 @@
-# Local alpha validation
+# Validation
 
-Recorded during initial development on 2026-09-22.
+Recorded on 2026-09-22 for the 0.2.0 local beta.
 
-## Completed
+## Automated engine and CLI checks
 
-- 43 automated tests pass with Python 3.14.7 and Git 2.55.0.
-- Tests use disposable source, clone and state directories. CLI tests compare
-  source and installed-clone contents/modes before and after every command.
-- Coverage includes historical ancestry, immutable baseline records, concurrent
-  edits, additions, deletions, binary conflicts, executable modes, missing source,
-  invalid metadata, symlink rejection, path boundaries, unreadable directories,
-  stale exports and flat source mappings.
-- `scripts/demo.py` completes track → diverged status → clean merge preview →
-  export and verifies both local and upstream changes survive.
-- `omarchy plugin validate .` passes against the locally installed validator.
-- `scripts/check-ui.sh` exits zero with Qt 6.11.2. It retains the linter's dynamic
-  QObject/Quickshell type warnings. The machine's unqualified Qt 5 `qmllint`
-  cannot parse the current QML syntax, so it is intentionally not used.
-- All 37 installed first-party plugin layouts can be materialized and structurally
-  validated as clones. This was a read-only compatibility inspection.
-- Real local discovery finds the existing customized audio clone and reports that
-  no baseline is recorded. No baseline was guessed or captured for it.
-- An isolated temporary Quickshell harness loaded the widget and panel and checked
-  fixture status, preview, selection, empty state and helper-start failure handling.
+- **106 tests pass on both Python 3.14.7 and Python 3.11.16**, with Git 2.55.0;
+  no skips. Python 3.11 was provisioned only in a disposable temporary environment.
+- Tests use disposable source, plugin and state roots. Read-only commands are
+  checked against before/after snapshots; fixture commands cannot call live shell IPC.
+- Baseline coverage includes current-source verification, known historical originals,
+  corrupted records/snapshots, cross-root plans, path boundaries and source disappearance.
+- Merge coverage includes independent and overlapping edits, additions, deletions,
+  binary conflicts, modes and file/directory collisions.
+- Saved-review coverage includes every resolution route, candidate edits after review,
+  stale clone/upstream/baseline inputs, conflict markers and invalid QML syntax.
+- Apply tests verify that the baseline advances to upstream while local edits remain
+  distinct across multiple subsequent updates.
+- Undo verifies exact file bytes/modes, directories, empty directories and baseline
+  state; intervening edits, changed backups and unsupported metadata are refused.
+- Fault injection covers apply/undo journal stages, swaps before journal updates,
+  interrupted creation, durable parent publication and recovery preserving unknown edits.
+  These are simulated interruption tests, not a hardware power-loss experiment.
+- Mocked shell tests cover delayed asynchronous discovery, a bounded deadline,
+  malformed registry output, transport errors, one activation attempt and pending guards.
+- `python scripts/demo.py` passes create → prepare → apply → undo and asserts both
+  the local customization and correct upstream ancestry at each step.
 
-## Remaining release validation
+## Packaging
 
-- A clean merge and valid manifest do not establish working QML behavior.
-- Verify actual installed-shell popup behavior, keyboard focus, scaling, placement,
-  alternative bar support, disable/re-enable and removal in a disposable desktop.
-- The Python 3.11 CI configuration is checked in; that version has not been run
-  locally on this machine.
-- Apply and undo are not present in this alpha, and need their own transaction,
-  interruption and stale-state tests before release.
+- The project metadata, plugin manifest, Python module and CLI consistently report
+  version **0.2.0**; the Python package requires Python 3.11 or newer.
+- A fresh source archive includes the native QML and manifest, bundled launcher,
+  Python modules, complete tests, scripts, documentation/images and CI configuration.
+  After unpacking that archive, **all 106 tests pass on Python 3.14.7 with no skips**;
+  the executable launcher reports `Clone Keeper 0.2.0`, and the full demo passes.
+- The Python wheel contains the CLI and its modules. Building it and installing it
+  in an isolated Python 3.11.16 environment passes the console version/help checks.
+  Temporary runtimes, installations and build artifacts were removed afterward.
 
-The development workflow has not enabled Clone Keeper in the user's active bar
-or modified installed clones or the Omarchy source package.
+The wheel is CLI-only. Native Omarchy installation uses the Git repository, which
+also supplies the plugin manifest, QML interface and bundled launcher; installing
+the Python wheel does not add the bar widget.
+
+## Native interface
+
+- `scripts/check-ui.sh` exits zero with Qt 6.11.2 and the installed Omarchy validator.
+  It checks every root QML component and retains 21 dynamic QObject/Quickshell type
+  warnings; there are no lint errors.
+- `python scripts/smoke-ui.py --native-load` exits zero. It runs the actual QML
+  controller against the real CLI with disposable roots and captures the actual
+  KeeperView, rather than replacing its contents with a mock interface.
+- The UI smoke exercises creation, baseline capture, all six conflict resolution
+  routes, reviewed apply with both fingerprints, transaction history and undo.
+  Final filesystem checks verify text and binary customizations were restored.
+- It also loads the real hidden BarWidget and Panel against installed Omarchy
+  modules in a separate Quickshell instance, including the widget's update count.
+- Captures cover clone list, creation, activation confirmation, conflict review,
+  three diff views, apply confirmation, history, undo, recovery guidance/confirmation,
+  empty state and narrow/larger-text layouts. Keyboard focus scrolls controls into view.
+- Activation is deliberately refused on fixture roots. Recovery interface states
+  are synthetic; actual recovery behavior is tested separately in the backend.
+- All 37 installed first-party source layouts were materialized and structurally
+  validated in a read-only compatibility inspection during initial development.
+  This does not establish runtime correctness of every resulting clone.
+- Real local discovery correctly leaves the existing customized audio clone
+  untracked because no trustworthy baseline is recorded.
+
+Reproduce the UI check on an Omarchy development machine:
+
+```bash
+scripts/check-ui.sh
+python scripts/smoke-ui.py --native-load --output /tmp/clone-keeper-ui-review
+```
+
+The output directory must not exist. The smoke leaves its disposable fixtures,
+logs and screenshots there for inspection. Omit --native-load for offscreen-only
+testing. The native load requires an existing Wayland session.
+
+## Remaining release checks
+
+The engine, interface content and hidden native component loads are tested.
+Actual bar installation, anchored popup interaction, horizontal/vertical and
+replacement bar placement, keyboard behavior in the compositor, and the complete
+disable/update/remove lifecycle still need a disposable desktop pilot.
+The pilot must also verify reopening after the shell rescan reloads Clone Keeper
+itself; the saved operation completes before that request.
+
+A clean merge, valid manifest and syntax check do not prove correct plugin
+behavior. Backups help undo recognized states; they do not make arbitrary QML
+behavior safe or sandboxed.
+
+Development has not enabled Clone Keeper in the active bar, changed installed
+clones, rewritten shell settings, or modified the Omarchy package.
+See [release preparation](RELEASE.md) for publication steps.
