@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "omarchy-clone-keeper"
+version = "0.1.0"
+description = "Track and preview upstream changes to customized Omarchy plugins"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [{name = "neilofneils404"}]
+dependencies = []
+
+[project.scripts]
+clone-keeper = "clone_keeper.cli:main"
+
+[tool.setuptools]
+packages = ["clone_keeper"]
