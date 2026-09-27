@@ -10,6 +10,8 @@ Item {
   required property var keeper
   signal closeRequested()
   focus: true
+  // The control that opened a confirmation, so keyboard use resumes there.
+  property Item returnFocus: null
 
   // Tab must bring off-screen controls into view, including large-text layouts.
   Window.onActiveFocusItemChanged: Qt.callLater(root.ensureFocusVisible)
@@ -25,6 +27,13 @@ Item {
     if (top < target) target = top
     else if (bottom > target + scroller.height) target = bottom - scroller.height
     scroller.contentY = Math.max(0, Math.min(target, Math.max(0, scroller.contentHeight - scroller.height)))
+  }
+
+  function restoreFocus() {
+    var item = root.returnFocus
+    root.returnFocus = null
+    if (item && item.visible && item.enabled) item.forceActiveFocus(Qt.TabFocusReason)
+    else root.forceActiveFocus()
   }
 
   Keys.onEscapePressed: {
@@ -52,11 +61,14 @@ Item {
       id: header
       width: parent.width
       spacing: Style.space(8)
-      Row {
+      // The buttons wrap below the title when it would not fit on one line.
+      Flow {
+        id: titleRow
         width: parent.width
         spacing: Style.space(8)
+        readonly property real titleSpace: width - actions.width - spacing
         Column {
-          width: parent.width - actions.width - parent.spacing
+          width: titleRow.titleSpace >= titleProbe.implicitWidth ? titleRow.titleSpace : titleRow.width
           spacing: Style.space(3)
           KeeperText { width: parent.width; text: "Clone Keeper"; font.pixelSize: Style.font.heading; font.bold: true }
           KeeperText {
@@ -94,6 +106,7 @@ Item {
           }
         }
       }
+      KeeperText { id: titleProbe; visible: false; text: "Clone Keeper"; font.pixelSize: Style.font.heading; font.bold: true }
       KeeperText {
         width: parent.width
         small: true
@@ -133,6 +146,25 @@ Item {
           text: root.keeper.notice
           color: Color.accent
         }
+        Column {
+          width: parent.width
+          visible: root.keeper.restartSuggested && root.keeper.live
+          spacing: Style.space(8)
+          KeeperText {
+            width: parent.width
+            small: true
+            muted: true
+            text: "The clone is enabled. Restart the Omarchy shell to load the new version and tidy the bar after the reload."
+          }
+          Ui.Button {
+            objectName: "restartShell"
+            text: "Restart Omarchy shell"
+            focusable: true
+            bordered: true
+            enabled: !root.keeper.locked
+            onClicked: root.keeper.askRestart()
+          }
+        }
         Loader {
           width: parent.width
           sourceComponent: root.keeper.page === "new" ? newPage
@@ -167,8 +199,11 @@ Item {
     message: root.keeper.confirmation ? root.keeper.confirmation.message : ""
     confirmText: root.keeper.confirmation ? root.keeper.confirmation.button : "Confirm"
     onOpenedChanged: {
-      if (opened) { selectedIndex = 0; forceActiveFocus() }
-      else root.forceActiveFocus()
+      if (opened) {
+        root.returnFocus = root.Window.activeFocusItem
+        selectedIndex = 0
+        forceActiveFocus()
+      } else Qt.callLater(root.restoreFocus)
     }
     Keys.onPressed: function(event) {
       if (handleKey(event)) event.accepted = true

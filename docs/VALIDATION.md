@@ -5,14 +5,14 @@ Recorded on 2026-09-22 for the 0.2.0 local beta and rerun on 2026-09-27 for the
 
 ## Automated engine and CLI checks
 
-- **131 tests pass on Python 3.14.7 and on Python 3.11.16**, both with Git 2.55.0
+- **134 tests pass on Python 3.14.7 and on Python 3.11.16**, both with Git 2.55.0
   and no skips. The 3.11 runtime was a uv-managed interpreter, not the system Python.
 - The new regressions terminate a process during clone/state staging for both
   apply and undo, then verify recovery. They also cover interrupted replacement
   of an existing stage, concurrent candidate edits before/during exchange, late
   editor saves through open files, and detached root rejection before any writes.
 - The demo, `scripts/check-ui.sh` and `scripts/smoke-ui.py --native-load` were
-  rerun on 2026-09-27 and pass. The UI check still reports 21 type warnings.
+  rerun on 2026-09-27 and pass. The UI check reports 22 type warnings.
 - Tests use disposable source, plugin and state roots. Read-only commands are
   checked against before/after snapshots; fixture commands cannot call live shell IPC.
 - Baseline coverage includes current-source verification, known historical originals,
@@ -46,7 +46,7 @@ Recorded on 2026-09-22 for the 0.2.0 local beta and rerun on 2026-09-27 for the
   version **0.3.0**; the Python package requires Python 3.11 or newer.
 - A fresh source archive includes the native QML and manifest, bundled launcher,
   Python modules, complete tests, scripts, documentation/images and CI configuration.
-  After unpacking that archive, **all 131 tests pass on Python 3.14.7 with no skips**;
+  After unpacking that archive, **all 134 tests pass on Python 3.14.7 with no skips**;
   the executable launcher reports `Clone Keeper 0.3.0`, and the full demo passes.
 - The Python wheel contains the CLI and its modules. Building it and installing it
   in an isolated Python 3.11.16 environment passes the console version/help checks.
@@ -59,7 +59,7 @@ the Python wheel does not add the bar widget.
 ## Native interface
 
 - `scripts/check-ui.sh` exits zero with Qt 6.11.2 and the installed Omarchy validator.
-  It checks every root QML component and retains 21 dynamic QObject/Quickshell type
+  It checks every root QML component and retains 22 dynamic QObject/Quickshell type
   warnings; there are no lint errors.
 - `python scripts/smoke-ui.py --native-load` exits zero. It runs the actual QML
   controller against the real CLI with disposable roots and captures the actual
@@ -68,6 +68,8 @@ the Python wheel does not add the bar widget.
   routes, reviewed apply with both fingerprints, transaction history and undo. It
   asserts every live-changing panel command is detached and that shown outcomes are
   dismissed, and checks recorded outcomes and the paused state of a running one.
+  An applied change to an enabled clone offers a shell restart, focus returns to
+  the control that opened a confirmation, and the CLI refuses the fixture restart.
   Final filesystem checks verify text and binary customizations were restored.
 - It also loads the real hidden BarWidget and Panel against installed Omarchy
   modules in a separate Quickshell instance, including the widget's update count.
@@ -125,22 +127,30 @@ Passed:
 - Horizontal and vertical (left) bars, a 734x815 output and a larger base font size.
 - The unit suite and demo also pass with TMPDIR on btrfs.
 
-Findings:
+Findings, each addressed afterwards and covered by the automated checks above:
 
-- After a dismissed confirmation, focus returns to the top of the panel instead
-  of the invoking button.
-- Conflict choices (Keep yours, Take upstream, Use baseline) replace the whole
-  file, so non-conflicting upstream changes in that file are dropped. The panel
-  says the choice covers the file, but only below the buttons.
+- After a dismissed confirmation, focus returned to the top of the panel instead
+  of the invoking button. Focus now returns to that control.
+- Conflict choices replace the whole file, so non-conflicting upstream changes in
+  that file are dropped. The panel said so only below the buttons; it now explains
+  this above them, labels them as file choices and points to manual resolution.
 - Applied or undone QML did not always render until the shell restarted, although
-  the confirmation only says enabled plugins may reload.
-- At a larger font size in a narrow panel, the header tagline breaks mid-word.
-- The outcome notice stays visible when the panel is reopened in the same session.
-- Omarchy, not Clone Keeper: any change inside a local plugin triggers a live
-  reload after which the indicators widget can overlap the workspaces until the
-  shell restarts (reproduced with a plain file touch and no enabled clones);
-  enabling a clone does not update a `centerAnchor` naming the built-in; the
-  dropdown popup can extend past the panel on short outputs.
+  the confirmation only said enabled plugins may reload. The panel now offers a
+  confirmed restart through `omarchy-restart-shell` for enabled clones. It refuses
+  unless the desktop session uses the same Omarchy installation, so a nested test
+  session cannot restart the real shell. The restart itself was not run in the pilot.
+- At a larger font size in a narrow panel, the header tagline broke mid-word; the
+  buttons now wrap below the title instead.
+- The outcome notice stayed visible when the panel was reopened in the same
+  session; it is now cleared when the panel closes.
+
+Open, outside Clone Keeper:
+
+- Any change inside a local plugin triggers a live Omarchy reload after which the
+  indicators widget can overlap the workspaces until the shell restarts
+  (reproduced with a plain file touch and no enabled clones).
+- Enabling a clone does not update a `centerAnchor` naming the built-in.
+- The Omarchy dropdown popup can extend past the panel on short outputs.
 
 Not covered: replacement bars, multiple monitors, mouse interaction, a physical
 (non-nested) session and hardware power loss.

@@ -17,6 +17,13 @@
 - Apply keeps the clone manifest's key order and indentation.
 - Path arguments expand `~/`; the panel rejects relative paths.
 - Documented the tested Omarchy version. CI also runs the demo.
+- After apply, undo or recovery of an enabled clone, the panel offers to restart
+  the Omarchy shell so the new version loads; added `restart-shell` to the CLI.
+  Status reports whether it is using the live plugin directory.
+- Conflict choices say they use a whole file and point to manual resolution.
+- Keyboard focus returns to the control that opened a confirmation.
+- The panel header keeps its title on one line at larger text sizes, and shown
+  outcomes are cleared when the panel closes.
 
 ## 0.2.0 — local beta, 2026-09-22
 

@@ -259,5 +259,51 @@ class EnabledStatusTests(unittest.TestCase):
         self.assertIsNone(row["enabled"])
 
 
+class RestartShellTests(unittest.TestCase):
+    def setUp(self):
+        self.fixture = test_cli.CloneKeeperIntegrationTests(methodName="runTest")
+        self.fixture.setUp()
+        self.addCleanup(self.fixture.doCleanups)
+        self.workflow = Workflow(Keeper(self.fixture.omarchy, self.fixture.plugins, self.fixture.state))
+
+    def test_fixture_roots_refuse_before_starting_a_restart(self):
+        with patch("clone_keeper.service.subprocess.Popen") as popen:
+            with self.assertRaisesRegex(KeeperError, "installed user plugin directory"):
+                self.workflow.restart_shell()
+            self.assertFalse(self.workflow.status()["live"])
+        popen.assert_not_called()
+
+    def test_live_restart_runs_in_its_own_session(self):
+        # The restart replaces the shell that runs the panel, killing its helper.
+        with patch.object(self.workflow, "is_live", return_value=True), \
+                patch.object(self.workflow, "_session_omarchy_path", return_value=str(self.fixture.omarchy)), \
+                patch("clone_keeper.service.subprocess.Popen") as popen:
+            result = self.workflow.restart_shell()
+        popen.assert_called_once()
+        self.assertEqual(popen.call_args.args[0], ["omarchy-restart-shell"])
+        self.assertIs(popen.call_args.kwargs["start_new_session"], True)
+        for stream in ("stdin", "stdout", "stderr"):
+            self.assertEqual(popen.call_args.kwargs[stream], subprocess.DEVNULL)
+        self.assertIn("Restarting", result["message"])
+
+    def test_a_different_session_shell_is_never_restarted(self):
+        # A nested test session shares the user's systemd session, whose shell
+        # omarchy-restart-shell would replace.
+        for session in ("/usr/share/omarchy", None):
+            with self.subTest(session=session), patch.object(self.workflow, "is_live", return_value=True), \
+                    patch.object(self.workflow, "_session_omarchy_path", return_value=session), \
+                    patch("clone_keeper.service.subprocess.Popen") as popen:
+                with self.assertRaisesRegex(KeeperError, "different Omarchy installation"):
+                    self.workflow.restart_shell()
+            popen.assert_not_called()
+
+    def test_missing_restart_command_is_reported(self):
+        with patch.object(self.workflow, "is_live", return_value=True), \
+                patch.object(self.workflow, "_session_omarchy_path", return_value=str(self.fixture.omarchy)), \
+                patch("clone_keeper.service.subprocess.Popen", side_effect=FileNotFoundError("omarchy-restart-shell")):
+            with self.assertRaisesRegex(KeeperError, "Could not start omarchy-restart-shell"):
+                self.workflow.restart_shell()
+
+
 if __name__ == "__main__":
     unittest.main()

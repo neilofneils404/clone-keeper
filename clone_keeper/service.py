@@ -73,6 +73,7 @@ class Workflow:
         operations, errors = self.operations.summaries()
         result["operations"] = operations
         result["errors"].extend(errors)
+        result["live"] = self.is_live()
         enabled = self._enabled_plugins()
         for row in result["clones"]:
             running = next((item["operation"] for item in operations
@@ -208,6 +209,38 @@ class Workflow:
         except KeeperError as exc:
             result["warning"] = "Files were saved, but the shell could not refresh: " + str(exc)
         return result
+
+    def restart_shell(self):
+        """Start Omarchy's own shell restart, which loads updated plugin code.
+
+        A live rescan reloads plugins, but changed QML is not reliably rebuilt
+        until the shell restarts. The restart replaces the shell running the
+        panel, so it runs in its own session and outlives this helper.
+        """
+        if not self.is_live():
+            raise KeeperError("Restarting the shell is only available for the installed user plugin directory")
+        # omarchy-restart-shell restarts the session's shell, whatever this
+        # process was given. Refuse when that is not the Omarchy in use here,
+        # such as a nested test session or a caller outside the desktop.
+        session = self._session_omarchy_path()
+        if session is None or Path(session).resolve() != self.keeper.omarchy_path.resolve():
+            raise KeeperError("The desktop session uses a different Omarchy installation; restart its shell yourself")
+        try:
+            subprocess.Popen(["omarchy-restart-shell"], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL, start_new_session=True)
+        except OSError as exc:
+            raise KeeperError(f"Could not start omarchy-restart-shell: {exc}") from exc
+        return {"message": "Restarting the Omarchy shell."}
+
+    @staticmethod
+    def _session_omarchy_path():
+        try:
+            process = subprocess.run(["systemctl", "--user", "show-environment"],
+                                     capture_output=True, text=True, timeout=5)
+        except (OSError, subprocess.TimeoutExpired, UnicodeError):
+            return None
+        values = [line.split("=", 1)[1] for line in process.stdout.splitlines() if line.startswith("OMARCHY_PATH=")]
+        return values[-1] if process.returncode == 0 and values else None
 
     def _shell(self, *args, timeout=8):
         try:

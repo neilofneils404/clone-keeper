@@ -31,6 +31,10 @@ QtObject {
   property bool processExited: false
   property int processExitCode: -1
   property var confirmation: null
+  // Status reports whether these are the installed plugins the live shell uses.
+  property bool live: false
+  // Omarchy's live reload does not reliably rebuild changed QML; a restart does.
+  property bool restartSuggested: false
   // Set by Panel. Recorded outcomes are only dismissed once someone can see them.
   property bool panelOpen: false
   // Detached operations reported by status, and outcomes this panel already showed.
@@ -95,7 +99,7 @@ QtObject {
       "resolve": "Updating your resolution…", "apply": "Applying reviewed changes…",
       "undo": "Restoring the previous version…", "recover": "Recovering the interrupted change…",
       "history": "Loading history…", "enable": "Enabling your clone…",
-      "dismiss": "Checking clones…"
+      "dismiss": "Checking clones…", "restart": "Restarting the Omarchy shell…"
     }
     return busy ? String(labels[operation] || "Working…") : ""
   }
@@ -109,6 +113,20 @@ QtObject {
   }
 
   function refreshStatus() { root.run("status", ["status", "--json"], true) }
+
+  // A shown outcome belongs to that viewing; reopening starts from status.
+  onPanelOpenChanged: if (!panelOpen) { root.notice = ""; root.restartSuggested = false }
+
+  function cloneEnabled(cloneId) {
+    for (var i = 0; i < root.clones.length; i++)
+      if (root.clones[i].id === cloneId) return root.clones[i].enabled === true
+    return false
+  }
+
+  // Apply, undo and recovery replace files of a clone the shell may be running.
+  function changesRunningClone(operation, cloneId) {
+    return root.live && ["apply", "undo", "recover"].indexOf(operation) !== -1 && root.cloneEnabled(cloneId)
+  }
 
   // The panel accepts absolute paths only: the helper's working directory is
   // the shell's, not the user's. The CLI expands a leading ~/.
@@ -217,7 +235,7 @@ QtObject {
       title: "Apply reviewed changes?", button: "Apply",
       message: "Apply this reviewed result to " + root.selectedId + "?\n\n"
         + Number(root.plan.summary ? root.plan.summary.files : root.plan.changes.length)
-        + " file(s) reviewed. A backup is saved for Undo. Enabled plugins may reload."
+        + " file(s) reviewed. A backup is saved for Undo." + root.restartHint(root.selectedId)
     }
   }
 
@@ -226,7 +244,7 @@ QtObject {
     root.confirmation = {
       action: "undo", cloneId: root.selectedId, title: "Restore previous version?", button: "Undo",
       message: "Restore " + root.selectedId + " and its baseline to the saved state before the last applied change?\n\n"
-        + "Undo refuses to overwrite edits made since that change. Enabled plugins may reload."
+        + "Undo refuses to overwrite edits made since that change." + root.restartHint(root.selectedId)
     }
   }
 
@@ -236,6 +254,21 @@ QtObject {
       action: "recover", cloneId: root.selectedId, title: "Recover interrupted change?", button: "Recover",
       message: "Finish the interrupted operation for " + root.selectedId
         + " using its saved recovery journal. Review the resulting status before continuing."
+    }
+  }
+
+  function restartHint(cloneId) {
+    return root.live && root.cloneEnabled(cloneId)
+      ? " Restart the Omarchy shell afterwards to load the new version; Clone Keeper offers this when it finishes."
+      : ""
+  }
+
+  function askRestart() {
+    if (!root.live || root.locked) return
+    root.confirmation = {
+      action: "restart", title: "Restart the Omarchy shell?", button: "Restart",
+      message: "Restart the Omarchy shell now?\n\n"
+        + "The bar and open panels reload so updated clones take effect. Clone Keeper closes while the shell restarts."
     }
   }
 
@@ -265,6 +298,9 @@ QtObject {
       if (action.planHash) args.push("--expect-plan", action.planHash)
       args.push("--detach", "--json")
       root.run("apply", args)
+    } else if (action.action === "restart") {
+      // The CLI starts the restart in its own session; it refuses fixture roots.
+      root.run("restart", ["restart-shell", "--json"])
     } else root.run(action.action, [action.action, action.cloneId, "--detach", "--json"])
   }
 
@@ -278,7 +314,7 @@ QtObject {
     root.processExited = false
     root.processExitCode = -1
     if (!preserveError) root.errorText = ""
-    if (!preserveNotice) root.notice = ""
+    if (!preserveNotice) { root.notice = ""; root.restartSuggested = false }
     root.busy = true
     helper.command = [root.helperPath].concat(args)
     helper.running = true
@@ -334,7 +370,10 @@ QtObject {
       if (root.shownRequests.indexOf(item.requestId) !== -1) { seen.push(item.requestId); continue }
       if (!root.panelOpen) continue
       seen.push(item.requestId)
-      if (item.status === "succeeded") notices.push(root.successNotice(item.operation, item.cloneId, item))
+      if (item.status === "succeeded") {
+        notices.push(root.successNotice(item.operation, item.cloneId, item))
+        if (root.changesRunningClone(item.operation, item.cloneId)) root.restartSuggested = true
+      }
       else failures.push(item.cloneId + ": " + String(item.message || "The operation failed."))
     }
     if (running) notices.push(String(running.message) + " Changes are paused until it finishes.")
@@ -359,6 +398,7 @@ QtObject {
     }
     if (root.operation === "status" && Array.isArray(result.clones)) {
       root.clones = result.clones
+      root.live = result.live === true
       root.upstreamVersion = String(result.upstreamVersion || "")
       root.hasLoaded = true
       if (!root.selectedClone) root.selectedId = root.clones.length > 0 ? root.clones[0].id : ""
@@ -381,6 +421,7 @@ QtObject {
       }
       if (root.operation === "enable") root.lastCreatedId = ""
       root.notice = root.successNotice(root.operation, root.selectedId, result)
+      root.restartSuggested = root.changesRunningClone(root.operation, root.selectedId)
       root.plan = null
       root.selectedFile = ""
       root.page = "clones"
@@ -389,6 +430,8 @@ QtObject {
       // old Undo button can remain available between the two processes.
       root.busy = true
       Qt.callLater(function() { root.busy = false; root.refreshStatus() })
+    } else if (root.operation === "restart") {
+      root.notice = String(result.message || "Restarting the Omarchy shell.")
     } else root.errorText = "Clone Keeper returned an unexpected response for " + root.operation + "."
   }
 

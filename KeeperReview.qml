@@ -204,14 +204,21 @@ Column {
         text: root.keeper.selectedConflict && root.keeper.selectedConflict.resolved
           ? "Resolution saved · change your choice below" : "Resolve this conflict"
       }
+      KeeperText {
+        width: parent.width
+        small: true
+        muted: true
+        text: "Each choice below uses one whole version of " + (root.keeper.selectedConflict ? root.keeper.selectedConflict.path : root.keeper.selectedFile)
+          + ", including its other changes. To keep your edits and upstream's, choose Manual resolution and edit the candidate."
+      }
       Flow {
         width: parent.width
         spacing: Style.space(6)
         Repeater {
           model: [
-            { value: "local", label: "Keep yours" },
-            { value: "upstream", label: "Take upstream" },
-            { value: "base", label: "Use baseline" },
+            { value: "local", label: "Keep your file" },
+            { value: "upstream", label: "Take upstream file" },
+            { value: "base", label: "Use baseline file" },
             { value: "delete", label: "Delete from result" }
           ]
           delegate: Ui.Button {
@@ -224,13 +231,6 @@ Column {
             onClicked: root.keeper.resolve(modelData.value, "")
           }
         }
-      }
-      KeeperText {
-        width: parent.width
-        small: true
-        muted: true
-        text: "The choice covers " + (root.keeper.selectedConflict ? root.keeper.selectedConflict.path : root.keeper.selectedFile)
-          + " and its contents."
       }
     }
   }

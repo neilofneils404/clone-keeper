@@ -121,6 +121,9 @@ directory. Use its plan ID in the following commands (replace `PLAN_ID`):
 # Or: --take upstream, base, delete; or --file /path/to/resolved-file
 ```
 
+Each `--take` choice uses one whole version of the file, including its changes
+outside the conflict. To keep both your edits and upstream's, merge by hand.
+
 For a manual merge, edit the file inside the printed candidate directory and
 accept it with `resolve PLAN_ID --path BarWidget.qml --take edited`. Re-review
 after every change. Conflict markers and unresolved choices prevent applying.
@@ -154,6 +157,13 @@ the result; changes stay paused while a detached operation is still running. CLI
 users can pass `--detach` too; `status` then lists the outcome until
 `clone-keeper dismiss REQUEST_ID` removes it. A failed shell refresh is reported
 separately from a successfully saved transaction.
+
+Omarchy's live reload does not reliably rebuild changed QML, and it can leave the
+bar misaligned until the shell restarts. After apply, undo or recovery of an enabled
+clone, the panel therefore offers **Restart Omarchy shell**, which runs
+`omarchy-restart-shell` after a confirmation. From a terminal, use
+`./bin/clone-keeper restart-shell` or `omarchy restart shell`. Clone Keeper only
+restarts the shell of the desktop session using the same Omarchy installation.
 
 ## Existing clones and missing ancestry
 

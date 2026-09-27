@@ -33,7 +33,8 @@ def parser():
         "resolve": "Choose a conflict resolution or accept an edited candidate", "apply": "Apply the exact reviewed candidate with recovery and undo",
         "history": "Inspect saved transactions", "undo": "Restore the most recent applied transaction",
         "recover": "Finish an interrupted operation from its journal",
-        "dismiss": "Forget recorded outcomes of detached operations"}
+        "dismiss": "Forget recorded outcomes of detached operations",
+        "restart-shell": "Restart the Omarchy shell so updated clones load (installed plugins only)"}
     for name, description in descriptions.items():
         command = commands.add_parser(name, help=description)
         command.add_argument("--json", action="store_true")
@@ -162,6 +163,8 @@ def execute(args, keeper, work):
         return work.refresh(work.transactions.undo(args.clone_id))
     if command == "dismiss":
         return work.operations.dismiss(args.request_ids)
+    if command == "restart-shell":
+        return work.restart_shell()
     return work.refresh(work.recover(args.clone_id))
 
 

@@ -241,8 +241,31 @@ ShellRoot {
         keeper.reportOperations()
         if (!test.check(keeper.locked && keeper.notice.indexOf("paused") !== -1, "background operation locks changes")) return
         test.capture("16-background-operation"); test.step++; break
-      case 30: keeper.operations = []; test.step++; break
-      case 31: console.log("SMOKE_OK real CLI create track resolve apply history undo; enable refused in fixture; recorded outcomes"); Qt.quit(); break
+      case 30: keeper.operations = []; keeper.notice = ""; keeper.refreshStatus(); test.step++; break
+      case 31:
+        // An applied change to an enabled clone offers a shell restart. The
+        // fixture is never live, so pretend here; the CLI still refuses below.
+        var enabledRows = JSON.parse(JSON.stringify(keeper.clones))
+        for (var r = 0; r < enabledRows.length; r++) if (enabledRows[r].id === "demo.clock") enabledRows[r].enabled = true
+        keeper.clones = enabledRows; keeper.live = true
+        keeper.operations = [{ requestId: "d".repeat(32), cloneId: "demo.clock", operation: "apply", status: "succeeded",
+          message: "Candidate applied; the baseline now records upstream.", warning: null, reloadRequired: false }]
+        keeper.reportOperations()
+        if (!test.check(keeper.restartSuggested, "enabled clone apply suggests a restart")) return
+        test.step++; break
+      case 32:
+        var restart = test.named(frame, "restartShell")
+        if (!test.check(!!restart && restart.visible, "restart action shown")) return
+        restart.forceActiveFocus(Qt.TabFocusReason); keeper.askRestart()
+        test.capture("17-restart-confirmation"); test.step++; break
+      case 33: keeper.confirmation = null; test.step++; break
+      case 34:
+        if (!test.check(test.named(frame, "restartShell").activeFocus, "focus returns to the invoking control")) return
+        keeper.askRestart(); keeper.confirmAction(); test.step++; break
+      case 35:
+        if (!test.check(keeper.errorText.indexOf("installed") !== -1, "isolated restart is refused")) return
+        keeper.live = false; keeper.operations = []; test.step++; break
+      case 36: console.log("SMOKE_OK real CLI create track resolve apply history undo; enable and restart refused in fixture; recorded outcomes; focus restored"); Qt.quit(); break
       }
     }
   }
@@ -274,6 +297,8 @@ ShellRoot {
     for item in commands:
         if item[0] in ("clone", "enable", "apply", "undo", "recover"):
             assert "--detach" in item, f"Panel must detach changes that reload it: {item}"
+    restarts = [item for item in commands if item[0] == "restart-shell"]
+    assert len(restarts) == 1, f"Expected one refused restart request: {restarts}"
     if list((state / "operations").glob("*.json")):
         raise AssertionError("Shown operation outcomes were not dismissed")
 
