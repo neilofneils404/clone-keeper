@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased — pre-release review fixes
+## 0.3.0 — local beta, 2026-09-27
 
 - Publish complete transaction staging trees atomically so interrupted copies can
   be recovered, including after the clone was changed but before baseline replacement.

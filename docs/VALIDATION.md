@@ -1,20 +1,18 @@
 # Validation
 
-Recorded on 2026-09-22 for the 0.2.0 local beta, and updated on 2026-09-27 after
-the pre-release review fixes (see the changelog's Unreleased section).
+Recorded on 2026-09-22 for the 0.2.0 local beta and rerun on 2026-09-27 for the
+0.3.0 local beta, after the pre-release review fixes.
 
 ## Automated engine and CLI checks
 
-- **131 tests pass on Python 3.14.7**, with no skips. The earlier 125-test suite
-  also passed on Python 3.11.16 with Git 2.55.0; the six new regressions have not
-  been rerun on Python 3.11. That runtime was provisioned only in a disposable
-  temporary environment.
+- **131 tests pass on Python 3.14.7 and on Python 3.11.16**, both with Git 2.55.0
+  and no skips. The 3.11 runtime was a uv-managed interpreter, not the system Python.
 - The new regressions terminate a process during clone/state staging for both
   apply and undo, then verify recovery. They also cover interrupted replacement
   of an existing stage, concurrent candidate edits before/during exchange, late
   editor saves through open files, and detached root rejection before any writes.
-- The demo and `scripts/check-ui.sh` were rerun on 2026-09-27 and pass. The UI
-  check still reports 21 type warnings; native desktop smoke checks were not rerun.
+- The demo, `scripts/check-ui.sh` and `scripts/smoke-ui.py --native-load` were
+  rerun on 2026-09-27 and pass. The UI check still reports 21 type warnings.
 - Tests use disposable source, plugin and state roots. Read-only commands are
   checked against before/after snapshots; fixture commands cannot call live shell IPC.
 - Baseline coverage includes current-source verification, known historical originals,
@@ -45,12 +43,11 @@ the pre-release review fixes (see the changelog's Unreleased section).
 ## Packaging
 
 - The project metadata, plugin manifest, Python module and CLI consistently report
-  version **0.2.0**; the Python package requires Python 3.11 or newer.
+  version **0.3.0**; the Python package requires Python 3.11 or newer.
 - A fresh source archive includes the native QML and manifest, bundled launcher,
   Python modules, complete tests, scripts, documentation/images and CI configuration.
-  After unpacking that archive, **all 106 tests pass on Python 3.14.7 with no skips**;
-  the executable launcher reports `Clone Keeper 0.2.0`, and the full demo passes.
-  This archive check was recorded before the review fixes and has not been repeated.
+  After unpacking that archive, **all 131 tests pass on Python 3.14.7 with no skips**;
+  the executable launcher reports `Clone Keeper 0.3.0`, and the full demo passes.
 - The Python wheel contains the CLI and its modules. Building it and installing it
   in an isolated Python 3.11.16 environment passes the console version/help checks.
   Temporary runtimes, installations and build artifacts were removed afterward.

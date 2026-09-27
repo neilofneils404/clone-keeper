@@ -26,6 +26,6 @@ plugins with recorded ancestry, reviewed merges, recovery and undo.
 
 ## Release
 
-Version 0.2.0 is a local beta. Keep validation claims evidence-based; do not equate
+Version 0.3.0 is a local beta. Keep validation claims evidence-based; do not equate
 syntax checks or a clean merge with correct runtime behavior. See the release
 checklist and submission draft in docs/RELEASE.md.

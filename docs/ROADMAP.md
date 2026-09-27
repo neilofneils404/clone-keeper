@@ -1,6 +1,6 @@
 # Roadmap
 
-## 0.2.0 local beta — implemented
+## 0.3.0 local beta — implemented
 
 - Directory and flat built-in source discovery, normalization and identity.
 - Immutable, verifiable baselines with explicit provenance.
@@ -12,6 +12,7 @@
 - Stale-input detection, reviewed fingerprints and optional Qt 6 syntax checks.
 - Atomic whole-directory apply, baseline advancement, durable undo and recovery.
 - Native clone/create/review/history panel and bundled standalone CLI.
+- Detached panel operations that survive plugin reload, with recorded outcomes.
 - Isolated end-to-end, interruption, corruption and metadata tests.
 - Disposable command-line demo, UI smoke harness and CI.
 
