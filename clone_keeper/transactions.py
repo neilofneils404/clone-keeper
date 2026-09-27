@@ -23,7 +23,7 @@ import uuid
 from .core import (
     File, KeeperError, as_clone, canonical_tree, inventory, is_text, is_within,
     json_bytes, no_symlink_path, object_json, plugin_id, read_file, read_tree,
-    tree_hash, validate_candidate, write_tree,
+    styled_manifest, tree_hash, validate_candidate, write_tree,
 )
 
 
@@ -387,7 +387,22 @@ class Transactions:
             if record is None:
                 return {"cloneId": clone_id, "status": "clean", "transactionId": None,
                         "reloadRequired": False, "message": "No unfinished transaction."}
-            return self._finish(record, undo=record["status"].startswith("undo"))
+            undo = record["status"].startswith("undo")
+            result = self._finish(record, undo=undo)
+            if not undo:
+                self._discard_plans(record)
+            return result
+
+    def _discard_plans(self, record):
+        """Best-effort cleanup; a committed apply never fails because of it."""
+        from .plans import Plans
+        try:
+            plans = Plans(self.keeper)
+            meta, _ = self.keeper.load_baseline(record["cloneId"])
+            applied = object_json(read_file(plans.path(record["planId"]) / "record.json").data, "plan record")
+            plans.discard_superseded(record["cloneId"], {meta["baselineHash"], applied["baselineHash"]})
+        except (KeeperError, OSError, ValueError, KeyError):
+            pass
 
     def undo(self, clone_id):
         with self._lock(clone_id):
@@ -491,8 +506,11 @@ class Transactions:
         candidate_directories = {name: mode for name, mode in before_clone[1].items()
                                  if name == "." or not any(str(parent) in candidate
                                      for parent in (Path(name), *Path(name).parents))}
+        # Keep the clone's manifest layout; its parsed content is the reviewed one.
+        applied = {**candidate, "manifest.json": styled_manifest(candidate["manifest.json"],
+                                                                 before_clone[0].get("manifest.json"))}
         snapshots = {"before-clone": before_clone[:2], "before-state": before_state[:2],
-                     "after-clone": (candidate, candidate_directories),
+                     "after-clone": (applied, candidate_directories),
                      "after-state": (after_state_tree, {".": before_state[1]["."], "baseline": 0o700})}
         for name, (tree, directories) in snapshots.items():
             _write_snapshot(transaction / name, tree, directories)
@@ -513,4 +531,6 @@ class Transactions:
             raise KeeperError("Plan changed while preparing the transaction; review it again")
         # No live changes occur until the complete immutable journal is durable.
         self._persist(record, "prepared")
-        return self._finish(record)
+        result = self._finish(record)
+        self._discard_plans(record)
+        return result

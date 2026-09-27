@@ -18,6 +18,9 @@ source read-only.
   larger text, scrolling, focus visibility and Escape behavior.
 - Create/enable a clone, capture an existing baseline, save/resume a review, resolve
   conflicting files, apply, verify runtime behavior, undo and inspect history.
+- Start Enable, Apply and Undo from the panel and let Omarchy reload it; reopen and
+  confirm each outcome is shown once, the change completed and no recovery is pending.
+  Repeat Apply under heavy disk load.
 - Exercise disable/re-enable, update and removal; confirm state and other clones remain.
 - Capture preview assets from the tested build. Label synthetic demonstration
   content honestly. Never publish real private clone diffs or filesystem data.

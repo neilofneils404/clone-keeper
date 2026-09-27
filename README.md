@@ -44,6 +44,7 @@ update. Clone identity and Omarchy's source relationship remain intact.
 Both directory manifests and Omarchy's flat `*.manifest.json` sources with
 `clonePaths` mappings are supported. There is no background updating or network
 fetching. The panel refreshes when opened or requested; middle-click its icon to refresh.
+For the live plugin directory it also shows whether each clone is enabled in Omarchy.
 
 ![Reviewing a proposed upstream change](docs/images/review.png)
 
@@ -53,7 +54,9 @@ the interface; native bar installation and popup behavior still need the desktop
 ## Requirements and installation
 
 Linux, Python 3.11+, and Git are required. The panel needs Omarchy's plugin-capable
-Quickshell desktop. Optional **Qt 6 qmllint** checks candidate QML/JavaScript syntax;
+Quickshell desktop; it is tested with **Omarchy 4.0.0.alpha** (Qt 6.11). It uses
+Omarchy's shared panel components, shell IPC and clone layout, which may still change
+before Omarchy 4 is final. Optional **Qt 6 qmllint** checks candidate QML/JavaScript syntax;
 reviews report when it is unavailable. No Python packages or sudo are needed.
 Apply/undo require filesystem support for Linux `renameat2(RENAME_EXCHANGE)`;
 creation uses `RENAME_NOREPLACE`. Unsupported layouts fail before live replacement.
@@ -140,10 +143,16 @@ operation is interrupted, inspect `status`, then run:
 ```
 
 Recovery finishes the interrupted operation; it is not a generic reset. Unknown
-edits or damaged backups stop recovery and are preserved for inspection. Applying
-to an enabled plugin can reload it. Omarchy's rescan also reloads Clone Keeper, so
-the panel may close after a change; reopen it to inspect the saved status. A failed
-shell refresh is reported separately from a successfully saved transaction.
+edits or damaged backups stop recovery and are preserved for inspection.
+
+Changing an installed clone makes Omarchy reload its plugins, including Clone
+Keeper, which closes the panel. The panel therefore runs create, enable, apply, undo
+and recovery with `--detach`: the work continues in its own session even though the
+panel's helper process is stopped, and records its outcome. Reopen the panel to see
+the result; changes stay paused while a detached operation is still running. CLI
+users can pass `--detach` too; `status` then lists the outcome until
+`clone-keeper dismiss REQUEST_ID` removes it. A failed shell refresh is reported
+separately from a successfully saved transaction.
 
 ## Existing clones and missing ancestry
 
@@ -160,6 +169,7 @@ cloned, as a standalone source directory with its original `manifest.json` and I
 ./bin/clone-keeper track "$USER.clock" --baseline /path/to/original-clock
 ```
 
+Paths may start with `~/`; the panel accepts only absolute or `~/` paths.
 Historical flat sources must be materialized into their original clone layout.
 This records user-supplied ancestry; Clone Keeper cannot prove it is historically
 correct. Without a trustworthy original, keep the clone untracked. Repeated
@@ -176,20 +186,23 @@ Use a saved review for the additional QML syntax check.
 | --- | --- |
 | `$OMARCHY_PATH/shell/plugins` (default `/usr/share/omarchy/shell/plugins`) | Read built-in sources |
 | `~/.config/omarchy/plugins` | Read clones; create/apply/undo change an explicitly selected clone |
-| `$XDG_STATE_HOME/clone-keeper` (default `~/.local/state/clone-keeper`) | Baselines, saved plans, transaction backups and locks |
+| `$XDG_STATE_HOME/clone-keeper` (default `~/.local/state/clone-keeper`) | Baselines, saved plans, transaction backups, detached-operation outcomes and locks |
 | `~/.config/omarchy/.clone-keeper-staging` | Whole clone directories retained by transactions |
 | `<state>/.staging` | Baseline directories retained by transactions |
 
 Snapshots may contain private customizations. State is local, and no telemetry
 or plugin code execution occurs during inspection. Explicit enable uses supported
 shell IPC to update shell configuration; Clone Keeper does not directly rewrite it.
-Completed backups and staging trees remain until deliberately removed.
+Completed backups and staging trees remain until deliberately removed. Saved
+reviews are cleaned up: preparing again replaces an untouched review of the same
+inputs, and each apply removes reviews prepared against baselines older than the
+one it replaced (undo can make that one applicable again).
 
 Symlinks and special files are rejected. Comparisons ignore `.git`; applying to a
 clone containing Git metadata is refused. Apply also refuses hardlinks, special
 file permission bits, xattrs and ACLs it cannot preserve. Ordinary file and directory
 modes, empty directories, binary files and exact pre-apply manifest bytes are
-preserved for undo. Ownership and timestamps are not recorded or restored.
+preserved for undo. Apply keeps your clone's manifest key order and indentation. Ownership and timestamps are not recorded or restored.
 Initial limits: 3,000 files, 10 MiB per file, 50 MiB per tree.
 
 Override roots for isolated testing, before the subcommand:

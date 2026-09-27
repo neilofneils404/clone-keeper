@@ -223,7 +223,26 @@ ShellRoot {
         var focused = test.named(frame, "createTrackedClone")
         if (!test.check(focused.mapToItem(frame, 0, 0).y + focused.height < frame.height, "focused action scrolls into view")) return
         test.capture("15-large-text-focused"); test.step++; break
-      case 28: console.log("SMOKE_OK real CLI create track resolve apply history undo; enable refused in fixture"); Qt.quit(); break
+      case 28:
+        // Outcomes recorded while Omarchy had reloaded the panel appear once it is open.
+        keeper.page = "clones"; keeper.panelOpen = true; keeper.notice = ""; keeper.errorText = ""
+        keeper.operations = [
+          { requestId: "a".repeat(32), cloneId: "demo.clock", operation: "apply", status: "succeeded",
+            message: "Candidate applied; the baseline now records upstream.", warning: null, reloadRequired: false },
+          { requestId: "b".repeat(32), cloneId: "demo.audio", operation: "enable", status: "interrupted",
+            message: "The enable request for demo.audio stopped before recording a result." }]
+        keeper.reportOperations()
+        if (!test.check(keeper.notice.indexOf("applied") !== -1 && keeper.errorText.indexOf("demo.audio") !== -1
+            && keeper.pendingDismissals.length + (keeper.operation === "dismiss" ? 2 : 0) >= 2, "recorded outcomes shown")) return
+        test.step++; break
+      case 29:
+        keeper.operations = [{ requestId: "c".repeat(32), cloneId: "demo.clock", operation: "apply",
+          status: "running", message: "Finishing apply for demo.clock…" }]
+        keeper.reportOperations()
+        if (!test.check(keeper.locked && keeper.notice.indexOf("paused") !== -1, "background operation locks changes")) return
+        test.capture("16-background-operation"); test.step++; break
+      case 30: keeper.operations = []; test.step++; break
+      case 31: console.log("SMOKE_OK real CLI create track resolve apply history undo; enable refused in fixture; recorded outcomes"); Qt.quit(); break
       }
     }
   }
@@ -252,6 +271,11 @@ ShellRoot {
     commands = [json.loads(line) for line in (output / "commands.jsonl").read_text().splitlines()]
     applies = [item for item in commands if item[0] == "apply"]
     assert len(applies) == 1 and "--expect" in applies[0] and "--expect-plan" in applies[0]
+    for item in commands:
+        if item[0] in ("clone", "enable", "apply", "undo", "recover"):
+            assert "--detach" in item, f"Panel must detach changes that reload it: {item}"
+    if list((state / "operations").glob("*.json")):
+        raise AssertionError("Shown operation outcomes were not dismissed")
 
     if args.native_load:
         native = output / "native"

@@ -14,6 +14,7 @@ its explicit apply confirmation.
 | validation.py | Optional Qt 6 syntax checking without executing candidate code |
 | transactions.py | Locks, metadata-preserving snapshots, atomic swaps, undo and recovery |
 | service.py | Creation, tracking, status, history and bounded shell IPC |
+| operations.py | Detached execution and recorded outcomes of panel-initiated changes |
 | cli.py | Human/JSON command boundary |
 | KeeperController.qml | Process lifecycle, review state and confirmation actions |
 | KeeperView.qml and page components | Native clone, creation, review and history views |
@@ -75,6 +76,11 @@ immutable hashes and the configured clone path. Reviews show three diffs: origin
 to local, original to upstream, and local to candidate. Displayed diffs can be
 truncated; full candidate files remain available.
 
+Preparing again removes an older plan only when it has identical inputs, no
+recorded resolutions and an unedited candidate. After an apply, plans prepared
+against baselines other than the new one and the one it replaced are removed;
+status offers to resume only a plan matching the current baseline.
+
 File/directory collisions resolve as a path family. Choices are local, upstream,
 original, deletion, an external replacement file, or an edited candidate. Resolution
 hashes bind each conflict to its accepted file family; editing it again invalidates
@@ -111,7 +117,9 @@ Before durable intent:
 Transaction journals live at transactions/<clone>/<uuid>/. They retain immutable
 before-clone, before-state, after-clone and after-state inventories. Snapshot
 hashes include ordinary file modes, directory modes and empty directories. Undo
-restores exact pre-apply bytes, including noncanonical manifest formatting.
+restores exact pre-apply bytes, including noncanonical manifest formatting. When
+the reviewed manifest is the generated canonical form, apply writes it with the
+installed clone's key order and indentation; its parsed content is unchanged.
 
 Git metadata, hardlinks, special file mode bits, xattrs/ACLs, symlinks and special files
 are refused on apply because this version cannot preserve them faithfully.
@@ -143,11 +151,25 @@ pruning, selective undo, force overwrite, or redo command in this version.
 ## Shell integration
 
 After live mutations, a rescan request lets Omarchy reload enabled clones. The
-current shell unloads all plugin widgets and panels, including Clone Keeper, so
-its panel can close before the child process response is displayed. All durable
-state changes finish before the rescan request; reopening reconstructs status.
+shell also watches the installed plugins directory with inotify and reloads
+plugins 150 ms after a change. A reload unloads all plugin widgets and panels,
+including Clone Keeper, and Quickshell kills the process started by a destroyed
+Process object. A panel request that changes a clone would therefore be killed
+by its own first live swap or rescan.
+
+The panel runs clone, enable, apply, undo and recover with --detach. The CLI
+forks a worker into a new session, points its standard streams at /dev/null and
+waits for it. The worker durably records operations/<request>.json as running
+(with its PID and process start time) before the caller continues, then records
+success or failure. If the caller is killed, the worker finishes and its record
+remains. Status reports running, finished and interrupted (a running record whose
+process no longer exists) operations; a reopened panel shows finished outcomes,
+pauses changes while one is running, and dismisses outcomes once shown. The
+worker still takes the clone lock and journals exactly as a foreground command.
 A transport failure is a warning on an otherwise successful saved operation.
-Custom plugin roots never issue live shell mutations.
+Custom plugin roots never issue live shell mutations. For the live plugins
+directory, status reads activation state through the read-only listPlugins IPC
+with a two-second timeout and reports it as unknown when unavailable.
 
 Enable is separate and explicit. It checks pending operations under the clone
 lock, requests a rescan, polls read-only registry discovery, and sends exactly

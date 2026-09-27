@@ -130,6 +130,8 @@ class Plans:
         for name in roots:
             if conflicts[name].startswith("File/directory"):
                 candidate = replace_family(candidate, name, family(local, name))
+        # Preparing again replaces untouched reviews of the same inputs.
+        self.discard_duplicates(clone_id, {key: report[key] for key in ("baselineHash", "localHash", "upstreamHash")})
         plan_id = uuid.uuid4().hex
         record = {"schemaVersion": 1, "id": plan_id, "cloneId": clone_id,
                   "sourceId": source_id, "clonePath": str(path),
@@ -203,6 +205,51 @@ class Plans:
                 "validation": {"valid": not errors, "errors": errors, "syntax": syntax},
                 "stale": bool(stale), "staleReasons": stale,
                 "editablePath": str(self.path(plan_id) / "candidate")}
+
+    def discard(self, clone_id: str, obsolete) -> list[str]:
+        """Remove a clone's saved plans for which obsolete(record, root) is true.
+
+        Callers hold the clone lock. Removal is best-effort cleanup: a plan is
+        hidden atomically, then deleted, and unreadable plans are left alone.
+        """
+        directory = self.keeper.state_dir / "plans"
+        no_symlink_path(directory)
+        if not directory.exists():
+            return []
+        removed = []
+        for path in sorted(directory.iterdir()):
+            if path.name.startswith(".") or not path.is_dir():
+                continue
+            try:
+                record = object_json(read_file(path / "record.json").data, str(path))
+                if record.get("cloneId") != clone_id or record.get("id") != path.name:
+                    continue
+                if not obsolete(record, path):
+                    continue
+                hidden = directory / (".discarded-" + path.name)
+                os.rename(path, hidden)
+                shutil.rmtree(hidden)
+                removed.append(path.name)
+            except (KeeperError, OSError, ValueError):
+                continue
+        return removed
+
+    def discard_superseded(self, clone_id: str, baseline_hashes: set[str]) -> list[str]:
+        """After an apply, keep plans for the current and previous baselines only.
+
+        A plan binds its baseline; older ones can never become applicable again
+        unless every later apply is undone, and can then be prepared anew.
+        """
+        return self.discard(clone_id, lambda record, _: record.get("baselineHash") not in baseline_hashes)
+
+    def discard_duplicates(self, clone_id: str, inputs: dict) -> list[str]:
+        """Remove untouched plans prepared from exactly the same inputs."""
+        def untouched(record, root):
+            if any(record.get(key) != value for key, value in inputs.items()):
+                return False
+            resolutions = object_json(read_file(root / "resolutions.json").data, "resolutions")
+            return not resolutions and tree_hash(read_tree(root / "candidate")) == record.get("candidateHash")
+        return self.discard(clone_id, untouched)
 
     def resolve(self, plan_id: str, path: str, take: str | None = None, replacement_file: Path | None = None) -> dict:
         from .transactions import clone_lock, exchange_directories

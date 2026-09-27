@@ -11,8 +11,9 @@ import unittest
 from tests import test_cli
 
 
-@unittest.skipUnless(shutil.which("git"), "git is required for merge integration tests")
-class CloneKeeperWorkflowTests(unittest.TestCase):
+class WorkflowFixture(unittest.TestCase):
+    """Disposable roots and CLI helpers shared by workflow acceptance tests."""
+
     def setUp(self):
         # Reuse the disposable real-schema fixture without inheriting its tests.
         self.fixture = test_cli.CloneKeeperIntegrationTests(methodName="runTest")
@@ -102,6 +103,9 @@ class CloneKeeperWorkflowTests(unittest.TestCase):
         self.assertEqual(local_before, self.snapshot(self.plugins))
         self.assertEqual(baseline_before, self.baseline_snapshot())
 
+
+@unittest.skipUnless(shutil.which("git"), "git is required for merge integration tests")
+class CloneKeeperWorkflowTests(WorkflowFixture):
     def test_prepare_and_review_leave_installed_clone_and_baseline_unchanged(self):
         plan = self.clean_update()
         baseline_before = self.baseline_snapshot()

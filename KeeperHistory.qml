@@ -20,7 +20,7 @@ Column {
     visible: !!root.keeper.selectedClone && root.keeper.selectedClone.canUndo === true
     focusable: true
     bordered: true
-    enabled: !root.keeper.busy
+    enabled: !root.keeper.locked
     onClicked: root.keeper.askUndo()
   }
   KeeperText {

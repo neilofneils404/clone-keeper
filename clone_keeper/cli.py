@@ -6,8 +6,15 @@ from pathlib import Path
 import sys
 
 from . import __version__
-from .core import Keeper, KeeperError
+from .core import Keeper, KeeperError, object_json, plugin_id, read_file
+from .operations import DETACHABLE, HANDLED
+from .plans import plan_identifier
 from .service import Workflow
+
+
+def user_path(value):
+    """Expand ~ so a path works the same from a terminal and from the panel."""
+    return Path(value).expanduser()
 
 
 def parser():
@@ -25,7 +32,8 @@ def parser():
         "plans": "List saved merge plans", "review": "Review a saved plan and detect stale inputs",
         "resolve": "Choose a conflict resolution or accept an edited candidate", "apply": "Apply the exact reviewed candidate with recovery and undo",
         "history": "Inspect saved transactions", "undo": "Restore the most recent applied transaction",
-        "recover": "Finish an interrupted operation from its journal"}
+        "recover": "Finish an interrupted operation from its journal",
+        "dismiss": "Forget recorded outcomes of detached operations"}
     for name, description in descriptions.items():
         command = commands.add_parser(name, help=description)
         command.add_argument("--json", action="store_true")
@@ -33,21 +41,26 @@ def parser():
             command.add_argument("clone_id")
         if name in ("review", "resolve", "apply"):
             command.add_argument("plan_id")
+        if name in DETACHABLE:
+            command.add_argument("--detach", action="store_true",
+                                 help="Finish even if this caller is killed; status reports the outcome until dismissed")
         if name == "track":
-            command.add_argument("--baseline", type=Path, help="Known original source directory with manifest.json")
+            command.add_argument("--baseline", type=user_path, help="Known original source directory with manifest.json")
         elif name == "clone":
             command.add_argument("source_id")
             command.add_argument("--id", dest="clone_id")
             command.add_argument("--enable", action="store_true", help="Also enable the new clone in the live shell")
         elif name == "plans":
             command.add_argument("--clone", dest="clone_id")
+        elif name == "dismiss":
+            command.add_argument("request_ids", nargs="+", metavar="REQUEST_ID")
         elif name == "export":
-            command.add_argument("--output", required=True, type=Path)
+            command.add_argument("--output", required=True, type=user_path)
         elif name == "resolve":
             command.add_argument("--path", required=True)
             choice = command.add_mutually_exclusive_group(required=True)
             choice.add_argument("--take", choices=["local", "upstream", "base", "delete", "edited"])
-            choice.add_argument("--file", type=Path)
+            choice.add_argument("--file", type=user_path)
         elif name == "apply":
             command.add_argument("--expect", required=True, help="Exact candidateHash from the reviewed plan")
             command.add_argument("--expect-plan", help="Optional planHash from the reviewed plan")
@@ -63,6 +76,9 @@ def human(result, command):
             print(f"{row['id']}: {row['status']} — {row['message']}")
             if row["tracked"]:
                 print(f"  {row['localChangedFiles']} local / {row['upstreamChangedFiles']} upstream files changed")
+        for item in result.get("operations", []):
+            print(f"Operation {item['requestId']} ({item['operation']} {item['cloneId']}): "
+                  f"{item['status']} — {item['message']}")
         for error in result["errors"]:
             print(f"Skipped {error['path']}: {error['message']}", file=sys.stderr)
     elif command in ("prepare", "preview", "review", "resolve"):
@@ -92,6 +108,8 @@ def human(result, command):
             print(f"{item['id']}  {item['status']}  {item['createdAt']}")
         if not result["transactions"]:
             print("No transactions recorded.")
+    elif command == "dismiss":
+        print(f"Dismissed {len(result['dismissed'])} recorded operation(s).")
     elif command == "track":
         print(f"Tracking {result['cloneId']} from {result['provenance']}.")
         print(f"Baseline: {result['baselineHash']} ({result['statePath']})")
@@ -103,60 +121,88 @@ def human(result, command):
         print(result["warning"], file=sys.stderr)
 
 
+def execute(args, keeper, work):
+    command = args.command
+    if command == "status":
+        return work.status()
+    if command == "sources":
+        return work.sources()
+    if command == "clone":
+        if args.enable and not work.is_live():
+            raise KeeperError("Enable is only available for the installed user plugin directory")
+        result = work.refresh(work.create(args.source_id, args.clone_id))
+        if args.enable:
+            try:
+                result.update(work.enable(result["cloneId"]))
+            except KeeperError as exc:
+                result["enabled"] = None
+                result["warning"] = "Clone saved, but activation was not confirmed. Check its status in Omarchy: " + str(exc)
+        return result
+    if command == "enable":
+        return work.enable(args.clone_id)
+    if command == "track":
+        return work.track(args.clone_id, args.baseline)
+    if command == "preview":
+        return keeper.preview(args.clone_id)[0]
+    if command == "export":
+        return keeper.export(args.clone_id, args.output)
+    if command == "prepare":
+        return work.plans.prepare(args.clone_id)
+    if command == "plans":
+        return work.saved_plans(args.clone_id)
+    if command == "review":
+        return work.plans.review(args.plan_id)
+    if command == "resolve":
+        return work.plans.resolve(args.plan_id, args.path, args.take, args.file)
+    if command == "apply":
+        return work.refresh(work.transactions.apply(args.plan_id, args.expect, args.expect_plan))
+    if command == "history":
+        return work.transactions.history(args.clone_id)
+    if command == "undo":
+        return work.refresh(work.transactions.undo(args.clone_id))
+    if command == "dismiss":
+        return work.operations.dismiss(args.request_ids)
+    return work.refresh(work.recover(args.clone_id))
+
+
+def target_clone(args, keeper, work):
+    """Name the clone a detachable command changes, without changing anything."""
+    if args.command == "clone":
+        return work.clone_id_for(args.source_id, args.clone_id)
+    if args.command == "apply":
+        path = keeper.state_dir / "plans" / plan_identifier(args.plan_id) / "record.json"
+        return plugin_id(object_json(read_file(path).data, "plan record").get("cloneId", ""))
+    return plugin_id(args.clone_id)
+
+
 def main(argv=None):
     args = parser().parse_args(argv)
     keeper = Keeper(args.omarchy_path, args.plugins_dir, args.state_dir)
     work = Workflow(keeper)
+    request_id = None
     try:
-        command = args.command
-        if command == "status":
-            result = work.status()
-        elif command == "sources":
-            result = work.sources()
-        elif command == "clone":
-            if args.enable and not work.is_live():
-                raise KeeperError("Enable is only available for the installed user plugin directory")
-            result = work.refresh(work.create(args.source_id, args.clone_id))
-            if args.enable:
-                try:
-                    result.update(work.enable(result["cloneId"]))
-                except KeeperError as exc:
-                    result["enabled"] = None
-                    result["warning"] = "Clone saved, but activation was not confirmed. Check its status in Omarchy: " + str(exc)
-        elif command == "enable":
-            result = work.enable(args.clone_id)
-        elif command == "track":
-            result = work.track(args.clone_id, args.baseline)
-        elif command == "preview":
-            result, _ = keeper.preview(args.clone_id)
-        elif command == "export":
-            result = keeper.export(args.clone_id, args.output)
-        elif command == "prepare":
-            result = work.plans.prepare(args.clone_id)
-        elif command == "plans":
-            result = work.saved_plans(args.clone_id)
-        elif command == "review":
-            result = work.plans.review(args.plan_id)
-        elif command == "resolve":
-            result = work.plans.resolve(args.plan_id, args.path, args.take, args.file)
-        elif command == "apply":
-            result = work.refresh(work.transactions.apply(args.plan_id, args.expect, args.expect_plan))
-        elif command == "history":
-            result = work.transactions.history(args.clone_id)
-        elif command == "undo":
-            result = work.refresh(work.transactions.undo(args.clone_id))
+        if getattr(args, "detach", False):
+            record = work.operations.run(target_clone(args, keeper, work), args.command,
+                                         lambda: execute(args, keeper, work))
+            request_id = record["requestId"]
+            if record["status"] != "succeeded":
+                raise KeeperError(record.get("error") or "The operation failed")
+            result = {**record["result"], "requestId": request_id}
         else:
-            result = work.refresh(work.recover(args.clone_id))
+            result = execute(args, keeper, work)
         if args.json:
             print(json.dumps(result, indent=2, ensure_ascii=False))
         else:
-            human(result, command)
+            human(result, args.command)
         return 0
-    except (KeeperError, OSError, ValueError, KeyError, TypeError) as exc:
+    except HANDLED as exc:
         message = str(exc)
         print(f"clone-keeper: {message}", file=sys.stderr)
         if args.json:
-            print(json.dumps({"error": message, "message": message}))
+            error = {"error": message, "message": message}
+            if request_id:
+                error["requestId"] = request_id
+            print(json.dumps(error))
         return 1
 
 

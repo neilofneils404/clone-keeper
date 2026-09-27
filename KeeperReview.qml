@@ -220,7 +220,7 @@ Column {
             focusable: true
             bordered: true
             fontSize: Style.font.bodySmall
-            enabled: !root.keeper.busy
+            enabled: !root.keeper.locked
             onClicked: root.keeper.resolve(modelData.value, "")
           }
         }
@@ -255,7 +255,7 @@ Column {
     Ui.TextField {
       id: replacement
       width: parent.width
-      placeholderText: "/absolute/path/to/resolved-file"
+      placeholderText: "/absolute/path/to/resolved-file or ~/…"
       enabled: !root.keeper.busy
       Accessible.name: "Replacement file for selected conflict"
     }
@@ -263,7 +263,7 @@ Column {
       text: "Use replacement file"
       focusable: true
       bordered: true
-      enabled: !root.keeper.busy && root.keeper.selectedFile !== "" && replacement.text.trim() !== ""
+      enabled: !root.keeper.locked && root.keeper.selectedFile !== "" && replacement.text.trim() !== ""
       onClicked: root.keeper.resolve("", replacement.text)
     }
     KeeperText { width: parent.width; small: true; text: "Saved candidate directory (select to copy)" }
@@ -278,7 +278,7 @@ Column {
       text: "Use edited candidate"
       focusable: true
       bordered: true
-      enabled: !root.keeper.busy && root.keeper.selectedFile !== "" && !!root.keeper.selectedConflict
+      enabled: !root.keeper.locked && root.keeper.selectedFile !== "" && !!root.keeper.selectedConflict
       onClicked: root.keeper.resolve("edited", "")
     }
   }

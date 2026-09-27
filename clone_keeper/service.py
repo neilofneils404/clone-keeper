@@ -10,6 +10,7 @@ import time
 from .core import (File, KeeperError, as_clone, atomic_new_tree, inventory,
                    json_bytes, manifest, no_symlink_path, object_json,
                    plugin_id, read_file, tree_hash, validate_candidate)
+from .operations import Operations
 from .plans import Plans, atomic_json
 from .transactions import Transactions, clone_lock
 
@@ -19,6 +20,7 @@ class Workflow:
         self.keeper = keeper
         self.plans = Plans(keeper)
         self.transactions = Transactions(keeper)
+        self.operations = Operations(keeper.state_dir)
 
     def sources(self):
         prefix = re.sub(r"[^A-Za-z0-9_-]", "-", getpass.getuser()).strip("-") or "user"
@@ -43,7 +45,8 @@ class Workflow:
                     if record.get("id") != path.name or record.get("schemaVersion") != 1:
                         raise KeeperError("Invalid merge plan record")
                     if clone_id is None or record["cloneId"] == clone_id:
-                        plans.append({"planId": path.name, "cloneId": record["cloneId"], "createdAt": record["createdAt"]})
+                        plans.append({"planId": path.name, "cloneId": record["cloneId"], "createdAt": record["createdAt"],
+                                      "baselineHash": record["baselineHash"]})
                 except (KeeperError, OSError, ValueError, KeyError, TypeError) as exc:
                     errors.append({"path": str(path), "message": str(exc)})
         return {"plans": sorted(plans, key=lambda item: item["createdAt"], reverse=True), "errors": errors}
@@ -67,9 +70,15 @@ class Workflow:
                 except (KeeperError, OSError, ValueError, KeyError, TypeError) as exc:
                     result["errors"].append({"path": str(entry), "message": str(exc)})
         plans = self.saved_plans()["plans"]
+        operations, errors = self.operations.summaries()
+        result["operations"] = operations
+        result["errors"].extend(errors)
+        enabled = self._enabled_plugins()
         for row in result["clones"]:
-            row.update(latestTransaction=None, pendingTransaction=None, canUndo=False,
-                       latestPlan=next((plan for plan in plans if plan["cloneId"] == row["id"]), None))
+            running = next((item["operation"] for item in operations
+                            if item["cloneId"] == row["id"] and item["status"] == "running"), None)
+            row.update(latestTransaction=None, pendingTransaction=None, canUndo=False, latestPlan=None,
+                       runningOperation=running, enabled=enabled.get(row["id"]) if enabled is not None else None)
             try:
                 history = self.transactions.history(row["id"])
                 records = history["transactions"]
@@ -80,24 +89,41 @@ class Workflow:
                     meta, _ = self.keeper.load_baseline(row["id"])
                     if meta.get("creationPending"):
                         row["pendingTransaction"] = "creation"
-                if row["pendingTransaction"]:
+                    # A plan prepared against another baseline can never be applied.
+                    row["latestPlan"] = next((plan for plan in plans if plan["cloneId"] == row["id"]
+                                              and plan["baselineHash"] == meta.get("baselineHash")), None)
+                if row["pendingTransaction"] and not running:
                     row.update(status="error", message="An interrupted operation needs recovery before further changes.", canUndo=False)
             except (KeeperError, OSError, ValueError, KeyError, TypeError) as exc:
                 row.update(status="error", message=str(exc), canUndo=False)
         return result
 
+    def _enabled_plugins(self):
+        """Read activation state from the live shell; unknown when unavailable."""
+        if not self.is_live():
+            return None
+        try:
+            plugins = json.loads(self._shell("shell", "listPlugins", timeout=2))
+            return {item["id"]: item.get("enabled") is True for item in plugins
+                    if isinstance(item, dict) and isinstance(item.get("id"), str)}
+        except (KeeperError, ValueError, TypeError):
+            return None
+
     def track(self, ident, baseline=None):
         with clone_lock(self.keeper, ident):
             return self.keeper.track(ident, baseline)
 
-    def create(self, source_id, clone_id=None):
+    def clone_id_for(self, source_id, clone_id=None):
         plugin_id(source_id)
         if clone_id is None:
             selected = next((item for item in self.sources()["sources"] if item["id"] == source_id), None)
             if selected is None:
                 raise KeeperError(f"Unknown built-in source: {source_id}")
             clone_id = selected["suggestedCloneId"]
-        plugin_id(clone_id)
+        return plugin_id(clone_id)
+
+    def create(self, source_id, clone_id=None):
+        clone_id = self.clone_id_for(source_id, clone_id)
         with clone_lock(self.keeper, clone_id):
             path = self.keeper.plugins_dir / clone_id
             no_symlink_path(path)

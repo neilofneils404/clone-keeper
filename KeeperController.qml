@@ -31,6 +31,12 @@ QtObject {
   property bool processExited: false
   property int processExitCode: -1
   property var confirmation: null
+  // Set by Panel. Recorded outcomes are only dismissed once someone can see them.
+  property bool panelOpen: false
+  // Detached operations reported by status, and outcomes this panel already showed.
+  property var operations: []
+  property var shownRequests: []
+  property var pendingDismissals: []
 
   readonly property var selectedClone: {
     for (var i = 0; i < clones.length; i++)
@@ -57,9 +63,16 @@ QtObject {
         return plan.conflicts[i]
     return null
   }
+  readonly property bool backgroundRunning: {
+    for (var i = 0; i < operations.length; i++)
+      if (operations[i].status === "running") return true
+    return false
+  }
+  // Changes wait for both this panel's helper and any detached operation.
+  readonly property bool locked: busy || backgroundRunning
   readonly property bool canApply: !!plan && !!plan.planId && !!plan.candidateHash
     && !plan.hasConflicts && !plan.stale && !!plan.validation && plan.validation.valid === true
-    && !busy && !(selectedClone && selectedClone.pendingTransaction)
+    && !locked && !(selectedClone && selectedClone.pendingTransaction)
   readonly property int updateCount: {
     var total = 0
     for (var i = 0; i < clones.length; i++)
@@ -70,6 +83,8 @@ QtObject {
     var total = 0
     for (var i = 0; i < clones.length; i++)
       if (clones[i].pendingTransaction || clones[i].status === "error" || clones[i].status === "missing-source") total++
+    for (var j = 0; j < operations.length; j++)
+      if (operations[j].status === "failed" || operations[j].status === "interrupted") total++
     return total
   }
   readonly property string activity: {
@@ -79,7 +94,8 @@ QtObject {
       "prepare": "Preparing a review…", "review": "Checking candidate files…",
       "resolve": "Updating your resolution…", "apply": "Applying reviewed changes…",
       "undo": "Restoring the previous version…", "recover": "Recovering the interrupted change…",
-      "history": "Loading history…", "enable": "Enabling your clone…"
+      "history": "Loading history…", "enable": "Enabling your clone…",
+      "dismiss": "Checking clones…"
     }
     return busy ? String(labels[operation] || "Working…") : ""
   }
@@ -93,6 +109,13 @@ QtObject {
   }
 
   function refreshStatus() { root.run("status", ["status", "--json"], true) }
+
+  // The panel accepts absolute paths only: the helper's working directory is
+  // the shell's, not the user's. The CLI expands a leading ~/.
+  function userPath(path) {
+    var value = String(path || "").trim()
+    return value.indexOf("/") === 0 || value.indexOf("~/") === 0 ? value : ""
+  }
 
   function selectClone(id) {
     if (root.busy) return
@@ -129,20 +152,27 @@ QtObject {
       root.errorText = "Choose a built-in plugin and a valid clone ID outside the omarchy namespace."
       return
     }
+    if (root.locked) return
     root.requestedClone = cloneId
-    root.run("clone", ["clone", sourceId, "--id", cloneId, "--json"])
+    root.run("clone", ["clone", sourceId, "--id", cloneId, "--detach", "--json"])
   }
 
   function track(baselinePath) {
-    if (!root.selectedId) return
+    if (!root.selectedId || root.locked) return
     var args = ["track", root.selectedId]
-    if (baselinePath && baselinePath.trim()) args.push("--baseline", baselinePath.trim())
+    if (baselinePath && baselinePath.trim()) {
+      if (!root.userPath(baselinePath)) {
+        root.errorText = "Enter the original directory as an absolute path, starting with / or ~/."
+        return
+      }
+      args.push("--baseline", root.userPath(baselinePath))
+    }
     args.push("--json")
     root.run("track", args)
   }
 
   function prepare() {
-    if (!root.selectedId || root.busy) return
+    if (!root.selectedId || root.locked) return
     root.selectedFile = ""
     root.diffView = "merge"
     root.run("prepare", ["prepare", root.selectedId, "--json"])
@@ -159,11 +189,16 @@ QtObject {
   }
 
   function resolve(take, replacementPath) {
-    if (!root.plan || !root.selectedFile || root.busy) return
+    if (!root.plan || !root.selectedFile || root.locked) return
     var conflictPath = root.selectedConflict ? root.selectedConflict.path : root.selectedFile
     var args = ["resolve", root.plan.planId, "--path", conflictPath]
-    if (replacementPath && replacementPath.trim()) args.push("--file", replacementPath.trim())
-    else args.push("--take", take)
+    if (replacementPath && replacementPath.trim()) {
+      if (!root.userPath(replacementPath)) {
+        root.errorText = "Enter the replacement file as an absolute path, starting with / or ~/."
+        return
+      }
+      args.push("--file", root.userPath(replacementPath))
+    } else args.push("--take", take)
     args.push("--json")
     root.run("resolve", args)
   }
@@ -187,7 +222,7 @@ QtObject {
   }
 
   function askUndo() {
-    if (!root.selectedClone || !root.selectedClone.canUndo || root.busy) return
+    if (!root.selectedClone || !root.selectedClone.canUndo || root.locked) return
     root.confirmation = {
       action: "undo", cloneId: root.selectedId, title: "Restore previous version?", button: "Undo",
       message: "Restore " + root.selectedId + " and its baseline to the saved state before the last applied change?\n\n"
@@ -196,7 +231,7 @@ QtObject {
   }
 
   function askRecover() {
-    if (!root.selectedClone || !root.selectedClone.pendingTransaction || root.busy) return
+    if (!root.selectedClone || !root.selectedClone.pendingTransaction || root.locked) return
     root.confirmation = {
       action: "recover", cloneId: root.selectedId, title: "Recover interrupted change?", button: "Recover",
       message: "Finish the interrupted operation for " + root.selectedId
@@ -205,7 +240,7 @@ QtObject {
   }
 
   function askEnable() {
-    if (!root.selectedId || root.busy) return
+    if (!root.selectedId || root.locked) return
     root.confirmation = {
       action: "enable", cloneId: root.selectedId, title: "Enable this clone?", button: "Enable",
       message: "Enable " + root.selectedId + " in Omarchy?\n\n"
@@ -216,7 +251,7 @@ QtObject {
   function confirmAction() {
     var action = root.confirmation
     root.confirmation = null
-    if (!action || root.busy) return
+    if (!action || root.locked) return
     if (action.action === "apply") {
       if (!root.canApply || !root.plan || root.plan.planId !== action.planId
           || root.plan.candidateHash !== action.candidateHash
@@ -224,14 +259,16 @@ QtObject {
         root.errorText = "The review changed. Review the latest result and apply again."
         return
       }
+      // Detached: Omarchy reloads Clone Keeper when the clone changes, and
+      // that must not interrupt the transaction. Status reports the outcome.
       var args = ["apply", action.planId, "--expect", action.candidateHash]
       if (action.planHash) args.push("--expect-plan", action.planHash)
-      args.push("--json")
+      args.push("--detach", "--json")
       root.run("apply", args)
-    } else root.run(action.action, [action.action, action.cloneId, "--json"])
+    } else root.run(action.action, [action.action, action.cloneId, "--detach", "--json"])
   }
 
-  function run(kind, args, preserveNotice) {
+  function run(kind, args, preserveNotice, preserveError) {
     if (root.busy) return
     root.operation = kind
     root.response = ""
@@ -240,7 +277,7 @@ QtObject {
     root.diagnosticReady = false
     root.processExited = false
     root.processExitCode = -1
-    root.errorText = ""
+    if (!preserveError) root.errorText = ""
     if (!preserveNotice) root.notice = ""
     root.busy = true
     helper.command = [root.helperPath].concat(args)
@@ -258,12 +295,64 @@ QtObject {
     }
   }
 
+  function successNotice(operation, cloneId, result) {
+    if (operation === "clone")
+      return "Created " + cloneId + " with a saved baseline. Enable it when you’re ready."
+    var messages = {
+      "track": "Baseline saved. You can now review future upstream changes.",
+      "apply": "Reviewed changes applied. The previous version is available in Undo.",
+      "undo": "Previous version restored.", "recover": "Interrupted change recovered.",
+      "enable": "Clone enabled in Omarchy."
+    }
+    var text = String(result.message || messages[operation] || "Done.")
+    if (result.warning) text += "\n" + String(result.warning)
+    if (result.reloadRequired) text += " Reload the Omarchy shell to use this version."
+    return text
+  }
+
+  // Forgetting a shown outcome waits until the helper is idle.
+  function dismiss(requestIds) {
+    if (requestIds.length === 0) return
+    root.pendingDismissals = root.pendingDismissals.concat(requestIds)
+    Qt.callLater(root.flushDismissals)
+  }
+
+  function flushDismissals() {
+    if (root.busy || root.pendingDismissals.length === 0) return
+    var requestIds = root.pendingDismissals
+    root.pendingDismissals = []
+    root.run("dismiss", ["dismiss"].concat(requestIds).concat(["--json"]), true, true)
+  }
+
+  // Show outcomes of detached operations, including ones that finished after
+  // Omarchy reloaded this panel, then forget each outcome once it was visible.
+  function reportOperations() {
+    var seen = [], notices = [], failures = [], running = null
+    for (var i = 0; i < root.operations.length; i++) {
+      var item = root.operations[i]
+      if (item.status === "running") { running = item; continue }
+      if (root.shownRequests.indexOf(item.requestId) !== -1) { seen.push(item.requestId); continue }
+      if (!root.panelOpen) continue
+      seen.push(item.requestId)
+      if (item.status === "succeeded") notices.push(root.successNotice(item.operation, item.cloneId, item))
+      else failures.push(item.cloneId + ": " + String(item.message || "The operation failed."))
+    }
+    if (running) notices.push(String(running.message) + " Changes are paused until it finishes.")
+    if (notices.length > 0) root.notice = notices.join("\n")
+    if (failures.length > 0) root.errorText = (root.errorText ? root.errorText + "\n" : "") + failures.join("\n")
+    root.dismiss(seen)
+  }
+
   function finish() {
     if (!root.busy || !root.processExited || !root.responseReady || !root.diagnosticReady) return
     root.busy = false
+    Qt.callLater(root.flushDismissals)
     var result = null
     try { result = JSON.parse(root.response) } catch (error) { }
+    if (root.operation === "dismiss") return
+    if (result && result.requestId) root.shownRequests = root.shownRequests.concat([String(result.requestId)])
     if (root.processExitCode !== 0 || !result || result.error) {
+      if (result && result.requestId) root.dismiss([String(result.requestId)])
       root.errorText = String(result && (result.message || result.error)
         || root.diagnostic.trim() || "Clone Keeper could not read the helper response.")
       return
@@ -277,6 +366,8 @@ QtObject {
         root.errorText = result.errors.map(function(item) {
           return typeof item === "string" ? item : String(item.message || JSON.stringify(item))
         }).join("\n")
+      root.operations = Array.isArray(result.operations) ? result.operations : []
+      root.reportOperations()
     } else if (root.operation === "sources" && Array.isArray(result.sources)) {
       root.sources = result.sources
     } else if (["prepare", "review", "resolve"].indexOf(root.operation) !== -1 && Array.isArray(result.changes)) {
@@ -287,19 +378,9 @@ QtObject {
       if (root.operation === "clone") {
         root.selectedId = String(result.cloneId || root.requestedClone)
         root.lastCreatedId = root.selectedId
-        root.notice = "Created " + root.selectedId + " with a saved baseline. Enable it when you’re ready."
-      } else {
-        var messages = {
-          "track": "Baseline saved. You can now review future upstream changes.",
-          "apply": "Reviewed changes applied. The previous version is available in Undo.",
-          "undo": "Previous version restored.", "recover": "Interrupted change recovered.",
-          "enable": "Clone enabled in Omarchy."
-        }
-        root.notice = String(result.message || messages[root.operation])
       }
       if (root.operation === "enable") root.lastCreatedId = ""
-      if (result.warning) root.notice += "\n" + String(result.warning)
-      if (result.reloadRequired) root.notice += " Reload the Omarchy shell to use this version."
+      root.notice = root.successNotice(root.operation, root.selectedId, result)
       root.plan = null
       root.selectedFile = ""
       root.page = "clones"
@@ -332,6 +413,14 @@ QtObject {
     var date = new Date(stamp)
     if (stamp && !isNaN(date.getTime())) stamp = Qt.formatDateTime(date, "MMM d, yyyy · HH:mm")
     return String(transaction.status || "saved") + (stamp ? " · " + stamp : "")
+  }
+
+  // Follow a detached operation started before Omarchy reloaded this panel.
+  property Timer poller: Timer {
+    interval: 1000
+    repeat: true
+    running: root.panelOpen && root.backgroundRunning
+    onTriggered: if (!root.busy) root.refreshStatus()
   }
 
   property Process helper: Process {

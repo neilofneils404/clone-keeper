@@ -15,13 +15,16 @@ Ui.Panel {
 
   function open() {
     root.controller.show()
+    keeperController.panelOpen = true
     keeperController.refresh()
   }
   function refresh() { keeperController.refresh() }
   function close() {
     keeperController.confirmation = null
+    keeperController.panelOpen = false
     root.controller.hide()
   }
+  onOpenedChanged: keeperController.panelOpen = root.opened
 
   KeeperController { id: keeperController }
   Component.onCompleted: Qt.callLater(keeperController.refreshStatus)

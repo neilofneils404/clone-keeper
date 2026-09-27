@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased — pre-release review fixes
+
+- Panel changes (create, enable, apply, undo, recover) run with `--detach`, so the
+  plugin reload they trigger can no longer kill them partway. Outcomes are recorded,
+  shown when the panel reopens and dismissed once seen; changes pause while one runs.
+- Added `--detach`, status `operations`, and `dismiss` to the CLI.
+- Status reports whether each live clone is enabled; the panel hides Enable for it.
+- Saved reviews no longer accumulate: untouched duplicates are replaced, reviews for
+  superseded baselines are removed after apply, and resume only offers current ones.
+- Apply keeps the clone manifest's key order and indentation.
+- Path arguments expand `~/`; the panel rejects relative paths.
+- Documented the tested Omarchy version. CI also runs the demo.
+
 ## 0.2.0 — local beta, 2026-09-22
 
 The complete maintenance cycle is available from the native panel and CLI.

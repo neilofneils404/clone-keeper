@@ -57,7 +57,7 @@ Column {
     text: "Create clone + baseline"
     focusable: true
     bordered: true
-    enabled: !root.keeper.busy && root.sourceId !== "" && root.keeper.validCloneId(cloneId.text.trim())
+    enabled: !root.keeper.locked && root.sourceId !== "" && root.keeper.validCloneId(cloneId.text.trim())
     onClicked: root.keeper.createClone(root.sourceId, cloneId.text.trim())
   }
   KeeperText {

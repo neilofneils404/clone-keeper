@@ -136,6 +136,43 @@ def canonical_tree(tree: Tree) -> Tree:
     return result
 
 
+def _ordered_like(value, template):
+    if isinstance(value, dict) and isinstance(template, dict):
+        keys = [key for key in template if key in value] + [key for key in value if key not in template]
+        return {key: _ordered_like(value[key], template.get(key)) for key in keys}
+    if isinstance(value, list) and isinstance(template, list):
+        return [_ordered_like(item, template[index] if index < len(template) else None)
+                for index, item in enumerate(value)]
+    return value
+
+
+def styled_manifest(candidate: File, previous: File | None) -> File:
+    """Write a generated manifest in the installed clone's key order and indentation.
+
+    Comparisons use canonical JSON, so the reviewed content is unchanged. A
+    candidate manifest whose bytes the user wrote by hand is kept exactly.
+    """
+    try:
+        value = json.loads(candidate.data)
+        template = json.loads(previous.data) if previous else None
+    except (ValueError, UnicodeError):
+        return candidate
+    if template is None or candidate.data != json_bytes(value):
+        return candidate
+    text = previous.data.decode()
+    indented = next((line for line in text.splitlines()[1:] if line[:1] in (" ", "\t")), None)
+    if indented is None:
+        indent = None
+    elif indented.startswith("\t"):
+        indent = "\t"
+    else:
+        indent = len(indented) - len(indented.lstrip(" "))
+    data = json.dumps(_ordered_like(value, template), indent=indent, ensure_ascii=False)
+    if text.endswith("\n"):
+        data += "\n"
+    return File(data.encode(), candidate.mode)
+
+
 def inventory(tree: Tree) -> dict:
     return {path: {"sha256": hashlib.sha256(file.data).hexdigest(), "mode": file.mode}
             for path, file in sorted(tree.items())}

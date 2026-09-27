@@ -1,10 +1,11 @@
 # Validation
 
-Recorded on 2026-09-22 for the 0.2.0 local beta.
+Recorded on 2026-09-22 for the 0.2.0 local beta, and updated on 2026-09-26 after
+the pre-release review fixes (see the changelog's Unreleased section).
 
 ## Automated engine and CLI checks
 
-- **106 tests pass on both Python 3.14.7 and Python 3.11.16**, with Git 2.55.0;
+- **125 tests pass on both Python 3.14.7 and Python 3.11.16**, with Git 2.55.0;
   no skips. Python 3.11 was provisioned only in a disposable temporary environment.
 - Tests use disposable source, plugin and state roots. Read-only commands are
   checked against before/after snapshots; fixture commands cannot call live shell IPC.
@@ -23,6 +24,13 @@ Recorded on 2026-09-22 for the 0.2.0 local beta.
   These are simulated interruption tests, not a hardware power-loss experiment.
 - Mocked shell tests cover delayed asynchronous discovery, a bounded deadline,
   malformed registry output, transport errors, one activation attempt and pending guards.
+- Detached operations: a caller killed with SIGKILL mid-operation (as Quickshell kills
+  a destroyed Process's child) leaves its worker running; the worker finishes, records
+  the outcome, and does not hold the caller's output pipes. Dead-worker, PID-reuse,
+  malformed-record, failure and CLI round-trip cases are covered, including status
+  reporting and dismissal.
+- Saved-review cleanup, current-baseline resume, manifest layout preservation, `~/`
+  path expansion and live activation reporting (mocked shell) are covered.
 - `python scripts/demo.py` passes create → prepare → apply → undo and asserts both
   the local customization and correct upstream ancestry at each step.
 
@@ -34,6 +42,7 @@ Recorded on 2026-09-22 for the 0.2.0 local beta.
   Python modules, complete tests, scripts, documentation/images and CI configuration.
   After unpacking that archive, **all 106 tests pass on Python 3.14.7 with no skips**;
   the executable launcher reports `Clone Keeper 0.2.0`, and the full demo passes.
+  This archive check was recorded before the review fixes and has not been repeated.
 - The Python wheel contains the CLI and its modules. Building it and installing it
   in an isolated Python 3.11.16 environment passes the console version/help checks.
   Temporary runtimes, installations and build artifacts were removed afterward.
@@ -51,7 +60,9 @@ the Python wheel does not add the bar widget.
   controller against the real CLI with disposable roots and captures the actual
   KeeperView, rather than replacing its contents with a mock interface.
 - The UI smoke exercises creation, baseline capture, all six conflict resolution
-  routes, reviewed apply with both fingerprints, transaction history and undo.
+  routes, reviewed apply with both fingerprints, transaction history and undo. It
+  asserts every live-changing panel command is detached and that shown outcomes are
+  dismissed, and checks recorded outcomes and the paused state of a running one.
   Final filesystem checks verify text and binary customizations were restored.
 - It also loads the real hidden BarWidget and Panel against installed Omarchy
   modules in a separate Quickshell instance, including the widget's update count.
@@ -83,8 +94,9 @@ The engine, interface content and hidden native component loads are tested.
 Actual bar installation, anchored popup interaction, horizontal/vertical and
 replacement bar placement, keyboard behavior in the compositor, and the complete
 disable/update/remove lifecycle still need a disposable desktop pilot.
-The pilot must also verify reopening after the shell rescan reloads Clone Keeper
-itself; the saved operation completes before that request.
+The pilot must also verify, on the real shell, that Enable and Apply started from
+the panel complete after Omarchy reloads Clone Keeper, and that reopening shows
+their outcome. The mechanism is tested with SIGKILL; the real reload path is not.
 
 A clean merge, valid manifest and syntax check do not prove correct plugin
 behavior. Backups help undo recognized states; they do not make arbitrary QML

@@ -67,11 +67,13 @@ Column {
         }
         KeeperText {
           width: parent.width
-          text: cloneRow.modelData.pendingTransaction ? "Recovery needed · " + cloneRow.modelData.id
+          text: cloneRow.modelData.runningOperation ? "Finishing " + cloneRow.modelData.runningOperation + "… · " + cloneRow.modelData.id
+            : cloneRow.modelData.pendingTransaction ? "Recovery needed · " + cloneRow.modelData.id
             : root.keeper.statusLabel(cloneRow.modelData.status) + " · " + cloneRow.modelData.id
           small: true
           muted: true
-          warning: !!cloneRow.modelData.pendingTransaction || cloneRow.modelData.status === "error"
+          warning: !cloneRow.modelData.runningOperation
+            && (!!cloneRow.modelData.pendingTransaction || cloneRow.modelData.status === "error")
         }
       }
       MouseArea {
@@ -113,15 +115,17 @@ Column {
     KeeperText {
       width: parent.width
       visible: !!root.keeper.selectedClone && !!root.keeper.selectedClone.pendingTransaction
+        && !root.keeper.selectedClone.runningOperation
       warning: true
       text: "An operation was interrupted. Finish recovery before making another change. Unexpected edits are preserved for manual review."
     }
     Ui.Button {
       visible: !!root.keeper.selectedClone && !!root.keeper.selectedClone.pendingTransaction
+        && !root.keeper.selectedClone.runningOperation
       text: "Recover interrupted operation"
       focusable: true
       bordered: true
-      enabled: !root.keeper.busy
+      enabled: !root.keeper.locked
       onClicked: root.keeper.askRecover()
     }
 
@@ -139,7 +143,7 @@ Column {
         text: "Capture verified baseline"
         focusable: true
         bordered: true
-        enabled: !root.keeper.busy
+        enabled: !root.keeper.locked
         onClicked: root.keeper.track("")
       }
       Ui.Button {
@@ -170,7 +174,7 @@ Column {
           text: "Save original baseline"
           focusable: true
           bordered: true
-          enabled: !root.keeper.busy && baselinePath.text.trim() !== ""
+          enabled: !root.keeper.locked && baselinePath.text.trim() !== ""
           onClicked: root.keeper.track(baselinePath.text)
         }
       }
@@ -180,10 +184,18 @@ Column {
       text: "Enable in Omarchy"
       visible: !!root.keeper.selectedClone && !root.keeper.selectedClone.pendingTransaction
         && root.keeper.selectedClone.status !== "error" && root.keeper.selectedClone.status !== "missing-source"
+        && root.keeper.selectedClone.enabled !== true
       focusable: true
       bordered: true
-      enabled: !root.keeper.busy
+      enabled: !root.keeper.locked
       onClicked: root.keeper.askEnable()
+    }
+    KeeperText {
+      width: parent.width
+      visible: !!root.keeper.selectedClone && root.keeper.selectedClone.enabled === true
+      small: true
+      muted: true
+      text: "Enabled in Omarchy."
     }
 
     Column {
@@ -208,7 +220,7 @@ Column {
           text: root.keeper.selectedClone && root.keeper.selectedClone.latestPlan ? "Prepare new review" : "Review changes"
           focusable: true
           bordered: true
-          enabled: !root.keeper.busy && !!root.keeper.selectedClone
+          enabled: !root.keeper.locked && !!root.keeper.selectedClone
             && root.keeper.selectedClone.status !== "error" && root.keeper.selectedClone.status !== "missing-source"
           onClicked: root.keeper.prepare()
         }
@@ -232,7 +244,7 @@ Column {
           visible: !!root.keeper.selectedClone && root.keeper.selectedClone.canUndo === true
           focusable: true
           bordered: true
-          enabled: !root.keeper.busy
+          enabled: !root.keeper.locked
           onClicked: root.keeper.askUndo()
         }
       }
