@@ -430,6 +430,20 @@ class Keeper:
         self.state_dir = state_dir.absolute()
 
     def version(self) -> str:
+        """Describe the Omarchy release for display; content hashes decide changes.
+
+        The packaged tree's version file can lag its package, so ask pacman as
+        `omarchy version` does. Development trees and fixtures use the file.
+        """
+        if self.omarchy_path.resolve() == Path("/usr/share/omarchy"):
+            for package in ("omarchy-dev", "omarchy"):
+                try:
+                    process = subprocess.run(["pacman", "-Q", package], capture_output=True, text=True, timeout=5)
+                except (OSError, subprocess.TimeoutExpired, UnicodeError):
+                    break
+                fields = process.stdout.split()
+                if process.returncode == 0 and len(fields) == 2:
+                    return fields[1]
         path = self.omarchy_path / "version"
         return read_file(path).data.decode().strip() if path.exists() else "unknown"
 

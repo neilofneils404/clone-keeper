@@ -55,9 +55,9 @@ desktop pilot; see [validation](docs/VALIDATION.md) for its findings.
 ## Requirements and installation
 
 Linux, Python 3.11+, and Git are required. The panel needs Omarchy's plugin-capable
-Quickshell desktop; it is tested with **Omarchy 4.0.0.alpha** (Qt 6.11). It uses
+Quickshell desktop; it is tested with **Omarchy 4.0.4** (Qt 6.11). It uses
 Omarchy's shared panel components, shell IPC and clone layout, which may still change
-before Omarchy 4 is final. Optional **Qt 6 qmllint** checks candidate QML/JavaScript syntax;
+between Omarchy releases. Optional **Qt 6 qmllint** checks candidate QML/JavaScript syntax;
 reviews report when it is unavailable. No Python packages or sudo are needed.
 Apply/undo require filesystem support for Linux `renameat2(RENAME_EXCHANGE)`;
 creation uses `RENAME_NOREPLACE`. Unsupported layouts fail before live replacement.

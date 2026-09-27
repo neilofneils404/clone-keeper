@@ -5,7 +5,7 @@ Recorded on 2026-09-22 for the 0.2.0 local beta and rerun on 2026-09-27 for the
 
 ## Automated engine and CLI checks
 
-- **134 tests pass on Python 3.14.7 and on Python 3.11.16**, both with Git 2.55.0
+- **137 tests pass on Python 3.14.7 and on Python 3.11.16**, both with Git 2.55.0
   and no skips. The 3.11 runtime was a uv-managed interpreter, not the system Python.
 - The new regressions terminate a process during clone/state staging for both
   apply and undo, then verify recovery. They also cover interrupted replacement
@@ -46,7 +46,7 @@ Recorded on 2026-09-22 for the 0.2.0 local beta and rerun on 2026-09-27 for the
   version **0.3.0**; the Python package requires Python 3.11 or newer.
 - A fresh source archive includes the native QML and manifest, bundled launcher,
   Python modules, complete tests, scripts, documentation/images and CI configuration.
-  After unpacking that archive, **all 134 tests pass on Python 3.14.7 with no skips**;
+  After unpacking that archive, **all 137 tests pass on Python 3.14.7 with no skips**;
   the executable launcher reports `Clone Keeper 0.3.0`, and the full demo passes.
 - The Python wheel contains the CLI and its modules. Building it and installing it
   in an isolated Python 3.11.16 environment passes the console version/help checks.
@@ -97,9 +97,11 @@ testing. The native load requires an existing Wayland session.
 
 ## Desktop pilot (2026-09-27)
 
-Run on Omarchy 4.0.0.alpha with Hyprland 0.56.2, inside nested Hyprland sessions
+Run on Omarchy 4.0.4-1 with Hyprland 0.56.2, inside nested Hyprland sessions
 with a disposable HOME, a copied OMARCHY_PATH (so a built-in could receive a
-simulated 4.0.1.alpha update) and a private D-Bus session. The installed system,
+simulated update) and a private D-Bus session. The package's version file still
+reads 4.0.0.alpha, which the panel then displayed; the simulated update set the
+copy's file to 4.0.1.alpha. Clone Keeper now reports the package version instead. The installed system,
 the live shell and the user's configuration were not changed. One session lived
 on tmpfs, a second on btrfs. The panel was driven with the keyboard only (wtype);
 mouse interaction was not tested.

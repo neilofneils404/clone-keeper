@@ -21,6 +21,8 @@
   the Omarchy shell so the new version loads; added `restart-shell` to the CLI.
   Status reports whether it is using the live plugin directory.
 - Conflict choices say they use a whole file and point to manual resolution.
+- The installed Omarchy version comes from its package, as `omarchy version` reports
+  it; the packaged version file can be stale.
 - Keyboard focus returns to the control that opened a confirmation.
 - The panel header keeps its title on one line at larger text sizes, and shown
   outcomes are cleared when the panel closes.

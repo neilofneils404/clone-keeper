@@ -259,6 +259,26 @@ class EnabledStatusTests(unittest.TestCase):
         self.assertIsNone(row["enabled"])
 
 
+class OmarchyVersionTests(unittest.TestCase):
+    def test_installed_omarchy_reports_its_package_version(self):
+        # /usr/share/omarchy/version can lag the package that installed it.
+        reply = subprocess.CompletedProcess(["pacman"], 0, "omarchy 4.0.4-1\n", "")
+        missing = subprocess.CompletedProcess(["pacman"], 1, "", "error: package 'omarchy-dev' was not found\n")
+        keeper = Keeper(Path("/usr/share/omarchy"), Path("/nonexistent/plugins"), Path("/nonexistent/state"))
+        with patch("clone_keeper.core.subprocess.run", side_effect=[missing, reply]) as run:
+            self.assertEqual(keeper.version(), "4.0.4-1")
+        self.assertEqual([call.args[0] for call in run.call_args_list],
+                         [["pacman", "-Q", "omarchy-dev"], ["pacman", "-Q", "omarchy"]])
+
+    def test_other_trees_use_their_version_file(self):
+        with tempfile.TemporaryDirectory(prefix="clone-keeper-version-") as name:
+            (Path(name) / "version").write_text("dev-tree\n")
+            keeper = Keeper(Path(name), Path(name) / "plugins", Path(name) / "state")
+            with patch("clone_keeper.core.subprocess.run") as run:
+                self.assertEqual(keeper.version(), "dev-tree")
+            run.assert_not_called()
+
+
 class RestartShellTests(unittest.TestCase):
     def setUp(self):
         self.fixture = test_cli.CloneKeeperIntegrationTests(methodName="runTest")
