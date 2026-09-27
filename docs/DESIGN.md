@@ -86,6 +86,11 @@ original, deletion, an external replacement file, or an edited candidate. Resolu
 hashes bind each conflict to its accepted file family; editing it again invalidates
 the acceptance. Candidate updates use a whole-directory exchange. A crash before
 the resolution record leaves an unresolved choice, not an accepted unknown result.
+Resolution checks the candidate before and after exchange, restoring it when a
+concurrent edit is detected and the replacement is still unchanged. Displaced
+trees remain at `plans/<id>/.resolution-*/candidate` for the saved plan's lifetime,
+so an editor holding an old file open can still save recoverable work. Such plans
+are excluded from untouched-duplicate cleanup.
 
 Structural validation checks schema, required fields, entry points, identity,
 layout and bar placement. Conflict markers block apply. Qt 6 qmllint optionally
@@ -104,6 +109,12 @@ Per-clone flock locks serialize Clone Keeper writers. Omarchy source, installed
 plugins and state must be separate trees. The implementation assumes a normal
 single-user environment, not a sandbox against other processes with the same
 permissions. It detects concurrent editor changes at the commit boundaries.
+Staging copies are built under separate `.stage-*` scratch directories and only
+published to the journal's staging paths once complete. Interrupted copies remain
+outside those paths, allowing recovery to reconstruct them from verified backups.
+Replacing an existing staging tree also uses an atomic exchange and retains the
+displaced tree. Detached commands validate root separation before their worker
+writes its first operation record.
 
 Before durable intent:
 

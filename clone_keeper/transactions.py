@@ -15,7 +15,6 @@ import fcntl
 import hashlib
 import os
 from pathlib import Path
-import shutil
 import stat
 import tempfile
 import uuid
@@ -196,7 +195,8 @@ class Transactions:
     def _checkpoint(self, name, record):
         """Tests may mock this hook to simulate process death after durable work."""
 
-    def _roots(self):
+    def validate_roots(self):
+        """Check root boundaries without creating any directories or files."""
         k = self.keeper
         for root in (k.omarchy_path, k.plugins_dir, k.state_dir):
             no_symlink_path(root)
@@ -212,7 +212,7 @@ class Transactions:
         plugin_id(ident)
         if ident.startswith("omarchy."):
             raise KeeperError("Transactions only support personal clone IDs")
-        self._roots()
+        self.validate_roots()
         directory = self.keeper.state_dir / "locks"
         no_symlink_path(directory)
         directory.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -315,10 +315,20 @@ class Transactions:
                 return
             if digest != record["snapshots"][other_name]:
                 raise KeeperError(f"Transaction staging contents changed; preserving {path}")
-            shutil.rmtree(path)
-            _fsync_directory(path.parent)
         path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-        _write_snapshot(path, tree, directories)
+        # A crash while copying must never leave a partial tree at the path
+        # recovery treats as a complete target or displaced live directory.
+        # Retain scratch/displaced trees, including on interruption; recovery
+        # only consumes the atomically published path.
+        temporary = Path(tempfile.mkdtemp(prefix=".stage-", dir=path.parent))
+        prepared = temporary / path.name
+        _write_snapshot(prepared, tree, directories)
+        if path.exists():
+            if _snapshot(path)[2] != record["snapshots"][other_name]:
+                raise KeeperError(f"Transaction staging contents changed; preserving {path}")
+            _exchange(prepared, path)
+        else:
+            publish_directory(prepared, path)
 
     def _move_to(self, live, stage, record, target_name, other_name, phase):
         _, _, actual = _snapshot(live)
@@ -375,7 +385,7 @@ class Transactions:
                 "message": "Clone and recorded baseline restored." if record["status"] == "undone" else "Candidate applied; the baseline now records upstream."}
 
     def history(self, clone_id):
-        self._roots()
+        self.validate_roots()
         records = self._records(clone_id)
         pending = self._pending(records)
         return {"cloneId": clone_id, "transactions": records,

@@ -182,6 +182,9 @@ def main(argv=None):
     request_id = None
     try:
         if getattr(args, "detach", False):
+            # The worker persists its running record before executing work.
+            # Reject unsafe roots before even that first state-directory write.
+            work.transactions.validate_roots()
             record = work.operations.run(target_clone(args, keeper, work), args.command,
                                          lambda: execute(args, keeper, work))
             request_id = record["requestId"]

@@ -1,12 +1,20 @@
 # Validation
 
-Recorded on 2026-09-22 for the 0.2.0 local beta, and updated on 2026-09-26 after
+Recorded on 2026-09-22 for the 0.2.0 local beta, and updated on 2026-09-27 after
 the pre-release review fixes (see the changelog's Unreleased section).
 
 ## Automated engine and CLI checks
 
-- **125 tests pass on both Python 3.14.7 and Python 3.11.16**, with Git 2.55.0;
-  no skips. Python 3.11 was provisioned only in a disposable temporary environment.
+- **131 tests pass on Python 3.14.7**, with no skips. The earlier 125-test suite
+  also passed on Python 3.11.16 with Git 2.55.0; the six new regressions have not
+  been rerun on Python 3.11. That runtime was provisioned only in a disposable
+  temporary environment.
+- The new regressions terminate a process during clone/state staging for both
+  apply and undo, then verify recovery. They also cover interrupted replacement
+  of an existing stage, concurrent candidate edits before/during exchange, late
+  editor saves through open files, and detached root rejection before any writes.
+- The demo and `scripts/check-ui.sh` were rerun on 2026-09-27 and pass. The UI
+  check still reports 21 type warnings; native desktop smoke checks were not rerun.
 - Tests use disposable source, plugin and state roots. Read-only commands are
   checked against before/after snapshots; fixture commands cannot call live shell IPC.
 - Baseline coverage includes current-source verification, known historical originals,

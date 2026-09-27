@@ -2,6 +2,11 @@
 
 ## Unreleased — pre-release review fixes
 
+- Publish complete transaction staging trees atomically so interrupted copies can
+  be recovered, including after the clone was changed but before baseline replacement.
+- Detect concurrent candidate edits during resolution and retain displaced candidate
+  trees with their saved plan, including files still open in an editor.
+- Validate detached-command root separation before writing operation records.
 - Panel changes (create, enable, apply, undo, recover) run with `--detach`, so the
   plugin reload they trigger can no longer kill them partway. Outcomes are recorded,
   shown when the panel reopens and dismissed once seen; changes pause while one runs.

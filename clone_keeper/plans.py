@@ -247,6 +247,10 @@ class Plans:
         def untouched(record, root):
             if any(record.get(key) != value for key, value in inputs.items()):
                 return False
+            # Displaced candidates may still receive saves through an editor's
+            # open file descriptor; a resolved plan is no longer untouched.
+            if any(root.glob(".resolution-*")):
+                return False
             resolutions = object_json(read_file(root / "resolutions.json").data, "resolutions")
             return not resolutions and tree_hash(read_tree(root / "candidate")) == record.get("candidateHash")
         return self.discard(clone_id, untouched)
@@ -276,11 +280,32 @@ class Plans:
                 raise KeeperError("Remove conflict markers before accepting this resolution")
             proposed = replace_family(candidate, path, replacement)
             root = self.path(plan_id)
-            with tempfile.TemporaryDirectory(prefix=".resolution-", dir=root.parent) as temporary:
-                stage = Path(temporary) / "candidate"
+            temporary = Path(tempfile.mkdtemp(prefix=".resolution-", dir=root))
+            stage = temporary / "candidate"
+            live = root / "candidate"
+            exchange_attempted = False
+
+            def matches(directory, expected):
+                refuse_git_metadata(directory)
+                return tree_hash(read_tree(directory)) == tree_hash(expected)
+
+            try:
                 stage.mkdir(mode=0o700)
                 write_tree(stage, proposed)
-                exchange_directories(stage, root / "candidate")
+                if not matches(live, candidate):
+                    raise KeeperError("Candidate changed while preparing the resolution; review it again")
+                # Retain the displaced tree once an exchange is attempted,
+                # even if fsync fails after the rename or an editor still has
+                # an old file open. Backups share the saved plan's lifetime.
+                exchange_attempted = True
+                exchange_directories(stage, live)
+                if not matches(stage, candidate):
+                    if matches(live, proposed):
+                        exchange_directories(stage, live)
+                    raise KeeperError(f"Candidate changed during resolution; files preserved at {live} and {stage}")
+            finally:
+                if not exchange_attempted:
+                    shutil.rmtree(temporary)
             resolutions = object_json(read_file(root / "resolutions.json").data, "resolutions")
             # Resolving a parent covers its known descendant conflict groups.
             for conflict in record["conflicts"]:
