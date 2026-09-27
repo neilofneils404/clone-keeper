@@ -93,20 +93,62 @@ The output directory must not exist. The smoke leaves its disposable fixtures,
 logs and screenshots there for inspection. Omit --native-load for offscreen-only
 testing. The native load requires an existing Wayland session.
 
-## Remaining release checks
+## Desktop pilot (2026-09-27)
 
-The engine, interface content and hidden native component loads are tested.
-Actual bar installation, anchored popup interaction, horizontal/vertical and
-replacement bar placement, keyboard behavior in the compositor, and the complete
-disable/update/remove lifecycle still need a disposable desktop pilot.
-The pilot must also verify, on the real shell, that Enable and Apply started from
-the panel complete after Omarchy reloads Clone Keeper, and that reopening shows
-their outcome. The mechanism is tested with SIGKILL; the real reload path is not.
+Run on Omarchy 4.0.0.alpha with Hyprland 0.56.2, inside nested Hyprland sessions
+with a disposable HOME, a copied OMARCHY_PATH (so a built-in could receive a
+simulated 4.0.1.alpha update) and a private D-Bus session. The installed system,
+the live shell and the user's configuration were not changed. One session lived
+on tmpfs, a second on btrfs. The panel was driven with the keyboard only (wtype);
+mouse interaction was not tested.
+
+Passed:
+
+- `omarchy plugin add` of the committed repository installs and enables the widget;
+  shell IPC opens the real anchored popup. Escape closes the panel, and closes only
+  the dialog when a confirmation is open. Confirmations default to Cancel.
+- Create, Enable, Apply and Undo started from the panel all complete after Omarchy
+  reloads Clone Keeper. Each outcome is shown on reopening, including after a full
+  shell restart, removal and reinstall, and is dismissed once seen.
+- Enable swaps the built-in for the clone in the bar layout and keeps its settings.
+- Review detects both sides changing, blocks Apply on conflict markers, and shows
+  the three-way conflict. Manual resolution through the edited candidate combines
+  both sides. Apply advances the baseline to upstream while the customization stays
+  recorded; after a shell restart the merged clone runs with both changes.
+- Undo restores the clone byte-for-byte (including modes) and the old baseline.
+- On btrfs under sustained disk load (IO pressure about 60%), panel Apply and Undo
+  complete in about 2.5 s instead of 0.5 s, pass through a pending journal, and
+  finish with no pending transaction and no stray staging trees.
+- Clone and Clone Keeper disable/re-enable, `omarchy plugin update` from a newer
+  commit, and removal keep clone state intact; removal leaves the enabled clone
+  running and every state file unchanged. Reinstalling resumes tracking.
+- Horizontal and vertical (left) bars, a 734x815 output and a larger base font size.
+- The unit suite and demo also pass with TMPDIR on btrfs.
+
+Findings:
+
+- After a dismissed confirmation, focus returns to the top of the panel instead
+  of the invoking button.
+- Conflict choices (Keep yours, Take upstream, Use baseline) replace the whole
+  file, so non-conflicting upstream changes in that file are dropped. The panel
+  says the choice covers the file, but only below the buttons.
+- Applied or undone QML did not always render until the shell restarted, although
+  the confirmation only says enabled plugins may reload.
+- At a larger font size in a narrow panel, the header tagline breaks mid-word.
+- The outcome notice stays visible when the panel is reopened in the same session.
+- Omarchy, not Clone Keeper: any change inside a local plugin triggers a live
+  reload after which the indicators widget can overlap the workspaces until the
+  shell restarts (reproduced with a plain file touch and no enabled clones);
+  enabling a clone does not update a `centerAnchor` naming the built-in; the
+  dropdown popup can extend past the panel on short outputs.
+
+Not covered: replacement bars, multiple monitors, mouse interaction, a physical
+(non-nested) session and hardware power loss.
 
 A clean merge, valid manifest and syntax check do not prove correct plugin
 behavior. Backups help undo recognized states; they do not make arbitrary QML
 behavior safe or sandboxed.
 
-Development has not enabled Clone Keeper in the active bar, changed installed
-clones, rewritten shell settings, or modified the Omarchy package.
+Development and the pilot have not enabled Clone Keeper in the active bar, changed
+installed clones, rewritten shell settings, or modified the Omarchy package.
 See [release preparation](RELEASE.md) for publication steps.

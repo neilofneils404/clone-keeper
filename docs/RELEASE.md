@@ -6,6 +6,8 @@
 release tag or marketplace issue has been created by this development workflow.
 The proposed public repository is neilofneils404/clone-keeper. The installed plugin
 ID remains neil.clone-keeper; check catalog uniqueness before publication.
+A nested desktop pilot ran on 2026-09-27; its results and open findings are in
+[validation](VALIDATION.md).
 
 ## Final desktop pilot
 

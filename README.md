@@ -49,7 +49,8 @@ For the live plugin directory it also shows whether each clone is enabled in Oma
 ![Reviewing a proposed upstream change](docs/images/review.png)
 
 Actual panel content in a disposable synthetic fixture. This capture demonstrates
-the interface; native bar installation and popup behavior still need the desktop pilot.
+the interface. Native installation and popup behavior were checked in a nested
+desktop pilot; see [validation](docs/VALIDATION.md) for its findings.
 
 ## Requirements and installation
 

@@ -18,10 +18,11 @@
 
 ## Public release
 
-See [the release checklist](RELEASE.md). Finish a disposable desktop pilot covering
-actual installation, popup interaction, scaling, horizontal/vertical and replacement
-bar placement, disable/re-enable, update and removal. Capture authentic release
-screenshots, then publish GitHub and submit the marketplace listing.
+See [the release checklist](RELEASE.md). A nested desktop pilot covered installation,
+keyboard popup interaction, scaling, horizontal/vertical bars, disable/re-enable,
+update and removal; address its findings in [validation](VALIDATION.md). Replacement
+bars remain unchecked. Capture authentic release screenshots, then publish GitHub and
+submit the marketplace listing.
 
 ## Later, driven by use
 
