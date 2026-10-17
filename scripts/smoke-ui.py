@@ -49,6 +49,8 @@ def main():
     clock = omarchy / "shell/plugins/panels/clock"
     (clock / "assets").mkdir()
     (clock / "assets/pixel.bin").write_bytes(b"\0original")
+    theme = 'import QtQuick\n\nQtObject {\n    property color accent: "red"\n}\n'
+    (clock / "Theme.qml").write_text(theme)
 
     # A fixture package cache and empty log keep origin searches inside the fixture.
     (output / "pkg").mkdir()
@@ -81,6 +83,8 @@ def main():
     before = original_qml.replace('"HH:mm"', '"hh:mm AP"')
     (plugins / "demo.clock/BarWidget.qml").write_text(before)
     (plugins / "demo.clock/assets/pixel.bin").write_bytes(b"\0local")
+    (plugins / "demo.clock/Theme.qml").write_text(theme.replace('"red"', '"blue"'))
+    (clock / "Theme.qml").write_text(theme.replace('"red"', '"green"'))
     (clock / "BarWidget.qml").write_text(original_qml.replace("refreshSeconds: 60", "refreshSeconds: 30"))
     (clock / "assets/pixel.bin").write_bytes(b"\0upstream")
     (omarchy / "version").write_text("ui-fixture-2\n")
@@ -204,7 +208,19 @@ ShellRoot {
         keeper.selectClone("demo.clock"); keeper.prepare(); test.step++; break
       case 9:
         if (!test.check(keeper.plan && keeper.plan.hasConflicts && !keeper.canApply, "conflict blocks apply")) return
-        test.capture("04-conflict"); test.step++; break
+        test.capture("04-conflict"); test.step = 200; break
+      // Overlapping lines are chosen one conflict at a time.
+      case 200:
+        keeper.selectedFile = "Theme.qml"
+        if (!test.check(keeper.selectedConflict && keeper.selectedConflict.blocks.length === 1
+                        && keeper.selectedConflict.blocks[0].upstream.indexOf("green") !== -1, "overlap blocks")) return
+        test.capture("04-overlap"); test.step++; break
+      case 201: keeper.resolveConflict(0, "both"); test.step++; break
+      case 202:
+        keeper.selectedFile = "Theme.qml"
+        if (!test.check(keeper.selectedConflict.resolved && keeper.selectedConflict.resolution === "conflicts",
+                        "resolve one overlap")) return
+        test.step = 10; break
       case 10:
         keeper.selectedFile = "BarWidget.qml"; keeper.diffView = "local"
         if (!test.check(keeper.changeDiff(keeper.selectedChange).indexOf("hh:mm AP") !== -1, "local diff")) return

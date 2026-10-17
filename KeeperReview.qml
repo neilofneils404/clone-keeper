@@ -10,6 +10,9 @@ Column {
   required property var keeper
   property bool advanced: false
   readonly property bool hasPlan: keeper.plan !== null
+  // Unresolved overlaps are shown as choices below instead of a marker-filled diff.
+  readonly property bool showsBlocks: root.keeper.diffView === "merge" && !!root.keeper.selectedConflict
+    && !root.keeper.selectedConflict.resolved && (root.keeper.selectedConflict.blocks || []).length > 0
   spacing: Style.space(12)
 
   function fileOptions() {
@@ -144,6 +147,7 @@ Column {
       muted: true
       text: root.keeper.diffView === "local" ? "Your clone compared with the saved baseline."
         : root.keeper.diffView === "upstream" ? "Current upstream compared with the saved baseline."
+        : root.showsBlocks ? "Both sides changed the same lines. Choose for each overlap below; the rest is merged."
         : "The proposed result compared with your current clone."
     }
     KeeperText {
@@ -159,7 +163,7 @@ Column {
       id: diffScroll
       width: parent.width
       height: Math.min(Style.space(260), Math.max(Style.space(95), diffText.implicitHeight))
-      visible: root.keeper.changeDiff(root.keeper.selectedChange) !== ""
+      visible: root.keeper.changeDiff(root.keeper.selectedChange) !== "" && !root.showsBlocks
       contentWidth: Math.max(width, diffText.implicitWidth)
       contentHeight: diffText.implicitHeight
       clip: true
@@ -187,7 +191,7 @@ Column {
     }
     KeeperText {
       width: parent.width
-      visible: root.keeper.changeDiff(root.keeper.selectedChange) === ""
+      visible: root.keeper.changeDiff(root.keeper.selectedChange) === "" && !root.showsBlocks
       small: true
       muted: true
       text: root.keeper.diffView === "merge" ? "No text changes to your current clone."
@@ -204,12 +208,82 @@ Column {
         text: root.keeper.selectedConflict && root.keeper.selectedConflict.resolved
           ? "Resolution saved · change your choice below" : "Resolve this conflict"
       }
+      // Overlapping lines, one choice per conflict; other changes stay merged.
+      Repeater {
+        model: root.keeper.selectedConflict && !root.keeper.selectedConflict.resolved
+          ? (root.keeper.selectedConflict.blocks || []) : []
+        delegate: Rectangle {
+          id: block
+          required property var modelData
+          readonly property int total: root.keeper.selectedConflict ? root.keeper.selectedConflict.blocks.length : 0
+          width: parent.width
+          height: blockContent.implicitHeight + Style.space(16)
+          radius: Style.cornerRadius
+          color: Util.alpha(Color.foreground, 0.04)
+          border.width: 1
+          border.color: Util.alpha(Color.urgent, 0.4)
+          Column {
+            id: blockContent
+            x: Style.space(8)
+            y: Style.space(8)
+            width: parent.width - Style.space(16)
+            spacing: Style.space(6)
+            KeeperText {
+              width: parent.width
+              small: true
+              font.bold: true
+              text: "Overlap " + (block.modelData.index + 1) + " of " + block.total + " · line " + block.modelData.line
+            }
+            Repeater {
+              model: [{ label: "Yours", text: block.modelData.local },
+                      { label: "Upstream", text: block.modelData.upstream }]
+              delegate: Column {
+                id: side
+                required property var modelData
+                width: blockContent.width
+                spacing: Style.space(2)
+                KeeperText { width: parent.width; small: true; muted: true; text: side.modelData.label }
+                Text {
+                  width: parent.width
+                  text: String(side.modelData.text).replace(/\n$/, "") || "(nothing)"
+                  color: Color.foreground
+                  font.family: "monospace"
+                  font.pixelSize: Style.font.bodySmall
+                  wrapMode: Text.WrapAnywhere
+                  textFormat: Text.PlainText
+                  maximumLineCount: 12
+                  elide: Text.ElideRight
+                }
+              }
+            }
+            Flow {
+              width: parent.width
+              spacing: Style.space(6)
+              Repeater {
+                model: [{ value: "local", label: "Keep yours" }, { value: "upstream", label: "Take upstream" },
+                        { value: "both", label: "Keep both" }, { value: "base", label: "Use original" }]
+                delegate: Ui.Button {
+                  required property var modelData
+                  text: modelData.label
+                  focusable: true
+                  bordered: true
+                  fontSize: Style.font.bodySmall
+                  enabled: !root.keeper.locked
+                  onClicked: root.keeper.resolveConflict(block.modelData.index, modelData.value)
+                }
+              }
+            }
+          }
+        }
+      }
       KeeperText {
         width: parent.width
         small: true
         muted: true
-        text: "Each choice below uses one whole version of " + (root.keeper.selectedConflict ? root.keeper.selectedConflict.path : root.keeper.selectedFile)
-          + ", including its other changes. To keep your edits and upstream's, choose Manual resolution and edit the candidate."
+        text: (root.keeper.selectedConflict && (root.keeper.selectedConflict.blocks || []).length > 0
+            ? "Or use one whole version of the file. " : "Each choice below uses one whole version of "
+              + (root.keeper.selectedConflict ? root.keeper.selectedConflict.path : root.keeper.selectedFile) + ". ")
+          + "Whole-file choices include that version's other changes."
       }
       Flow {
         width: parent.width
@@ -250,7 +324,15 @@ Column {
       width: parent.width
       small: true
       muted: true
-      text: "Use a replacement file for the selected path, or edit the saved candidate directory in your editor. Then mark the selected conflict resolved and refresh the review."
+      text: "Use a replacement file for the selected path, or edit the saved candidate in your editor. Then mark the selected conflict resolved."
+    }
+    Ui.Button {
+      text: "Open in editor"
+      visible: root.keeper.live
+      focusable: true
+      bordered: true
+      enabled: !root.keeper.locked && root.keeper.selectedFile !== ""
+      onClicked: root.keeper.openEditor()
     }
     Ui.TextField {
       id: replacement

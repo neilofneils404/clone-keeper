@@ -118,7 +118,7 @@ QtObject {
       "undo": "Restoring the previous version…", "recover": "Recovering the interrupted change…",
       "history": "Loading history…", "enable": "Enabling your clone…",
       "dismiss": "Checking clones…", "restart": "Restarting the Omarchy shell…",
-      "sync": "Checking clones…"
+      "sync": "Checking clones…", "edit": "Opening your editor…"
     }
     return busy ? String(labels[operation] || "Working…") : ""
   }
@@ -256,6 +256,17 @@ QtObject {
   function resume(planId) {
     if (!planId || root.busy) return
     root.run("review", ["review", planId, "--json"])
+  }
+
+  function resolveConflict(index, take) {
+    if (!root.plan || !root.selectedConflict || root.locked) return
+    root.run("resolve", ["resolve", root.plan.planId, "--path", root.selectedConflict.path,
+                         "--conflict", String(index), "--take", take, "--json"])
+  }
+
+  function openEditor() {
+    if (!root.plan || !root.selectedFile || root.locked) return
+    root.run("edit", ["edit", root.plan.planId, "--path", root.selectedFile, "--json"], false, false)
   }
 
   function resolve(take, replacementPath) {
@@ -513,6 +524,8 @@ QtObject {
       // old Undo button can remain available between the two processes.
       root.busy = true
       Qt.callLater(function() { root.busy = false; root.refreshStatus() })
+    } else if (root.operation === "edit") {
+      root.notice = "Opened " + String(result.path) + ". Save it, then choose Use edited candidate."
     } else if (root.operation === "restart") {
       root.notice = String(result.message || "Restarting the Omarchy shell.")
     } else root.errorText = "Clone Keeper returned an unexpected response for " + root.operation + "."

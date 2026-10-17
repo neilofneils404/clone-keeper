@@ -39,13 +39,14 @@ def parser():
         "history": "Inspect saved transactions", "undo": "Restore the most recent applied transaction",
         "recover": "Finish an interrupted operation from its journal",
         "dismiss": "Forget recorded outcomes of detached operations",
-        "restart-shell": "Restart the Omarchy shell so updated clones load (installed plugins only)"}
+        "restart-shell": "Restart the Omarchy shell so updated clones load (installed plugins only)",
+        "edit": "Open a saved plan's candidate file in your Omarchy editor (installed plugins only)"}
     for name, description in descriptions.items():
         command = commands.add_parser(name, help=description)
         command.add_argument("--json", action="store_true")
         if name in ("track", "origins", "preview", "export", "prepare", "history", "undo", "recover", "enable"):
             command.add_argument("clone_id")
-        if name in ("review", "resolve", "apply"):
+        if name in ("review", "resolve", "apply", "edit"):
             command.add_argument("plan_id")
         if name in DETACHABLE:
             command.add_argument("--detach", action="store_true",
@@ -68,10 +69,14 @@ def parser():
             command.add_argument("request_ids", nargs="+", metavar="REQUEST_ID")
         elif name == "export":
             command.add_argument("--output", required=True, type=user_path)
+        elif name == "edit":
+            command.add_argument("--path", required=True)
         elif name == "resolve":
             command.add_argument("--path", required=True)
+            command.add_argument("--conflict", type=int, metavar="N",
+                                 help="Resolve only conflict N in this file (see review); --take local, upstream, base or both")
             choice = command.add_mutually_exclusive_group(required=True)
-            choice.add_argument("--take", choices=["local", "upstream", "base", "delete", "edited"])
+            choice.add_argument("--take", choices=["local", "upstream", "base", "both", "delete", "edited"])
             choice.add_argument("--file", type=user_path)
         elif name == "apply":
             command.add_argument("--expect", required=True, help="Exact candidateHash from the reviewed plan")
@@ -207,7 +212,9 @@ def execute(args, keeper, work):
     if command == "review":
         return work.plans.review(args.plan_id)
     if command == "resolve":
-        return work.plans.resolve(args.plan_id, args.path, args.take, args.file)
+        if args.take == "both" and args.conflict is None:
+            raise KeeperError("--take both keeps both sides of one conflict; add --conflict N")
+        return work.plans.resolve(args.plan_id, args.path, args.take, args.file, args.conflict)
     if command == "apply":
         if args.restart_shell and not work.is_live():
             raise KeeperError("--restart-shell is only available for the installed user plugin directory")
@@ -221,6 +228,8 @@ def execute(args, keeper, work):
         return work.refresh(work.transactions.undo(args.clone_id))
     if command == "dismiss":
         return work.operations.dismiss(args.request_ids)
+    if command == "edit":
+        return work.open_editor(args.plan_id, args.path)
     if command == "restart-shell":
         return work.restart_shell()
     return work.refresh(work.recover(args.clone_id))

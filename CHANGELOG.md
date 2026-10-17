@@ -21,6 +21,9 @@
 - Applying to an enabled clone restarts the shell, checks its log for the clone's
   load failures and undoes the update automatically if it failed to load
   (`apply --restart-shell`).
+- Resolve overlapping lines one conflict at a time with Keep yours, Take upstream,
+  Keep both or Use original (`resolve --conflict N`); the rest of the file stays
+  merged. **Open in editor** hands a candidate file to your Omarchy editor (`edit`).
 
 ## 0.3.0 — local beta, 2026-09-27
 

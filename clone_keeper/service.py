@@ -306,6 +306,23 @@ class Workflow:
             raise KeeperError(f"Could not start omarchy-restart-shell: {exc}") from exc
         return {"message": "Restarting the Omarchy shell."}
 
+    def open_editor(self, plan_id, path):
+        """Open one candidate file in the owner's editor; the plan is unchanged until accepted."""
+        from .core import safe_relative
+        if not self.is_live():
+            raise KeeperError("Opening an editor is only available for the installed user plugin directory")
+        self.plans.load(plan_id)
+        target = self.plans.path(plan_id) / "candidate" / safe_relative(path)
+        no_symlink_path(target)
+        if not target.is_file():
+            raise KeeperError("That file is not in the candidate; choose a file present in the result")
+        try:
+            subprocess.Popen(["omarchy-launch-editor", str(target)], stdin=subprocess.DEVNULL,
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+        except OSError as exc:
+            raise KeeperError(f"Could not start omarchy-launch-editor: {exc}") from exc
+        return {"path": str(target), "message": "Editor opened."}
+
     def verify_update(self, clone_id):
         """After applying to an enabled clone, load it and undo the update if it fails to load."""
         from .health import restart_and_check

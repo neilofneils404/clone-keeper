@@ -59,14 +59,15 @@ the Python wheel does not add the bar widget.
 ## Native interface
 
 - `scripts/check-ui.sh` exits zero with Qt 6.11.2 and the installed Omarchy validator.
-  It checks every root QML component and retains 23 dynamic QObject/Quickshell type
+  It checks every root QML component and retains 25 dynamic QObject/Quickshell type
   warnings; there are no lint errors.
 - `python scripts/smoke-ui.py --native-load` exits zero. It runs the actual QML
   controller against the real CLI with disposable roots and captures the actual
   KeeperView, rather than replacing its contents with a mock interface.
 - The UI smoke exercises startup sync tracking an unedited clone made outside Clone
   Keeper, finding an untracked clone's original in a fixture package, adopting it,
-  a one-click clean update with its confirmation, creation, all six conflict resolution
+  a one-click clean update with its confirmation, choosing an overlapping text
+  conflict with Keep both, creation, all six conflict resolution
   routes, reviewed apply with both fingerprints, transaction history and undo. It
   asserts every live-changing panel command is detached and that shown outcomes are
   dismissed, and checks recorded outcomes and the paused state of a running one.

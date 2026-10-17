@@ -64,6 +64,83 @@ def marker_files(tree: Tree) -> list[str]:
                   if is_text(file.data) and markers.search(file.data))
 
 
+MARK = {"start": re.compile(rb"^<{7}(?: |\r?$)"), "base": re.compile(rb"^\|{7}(?: |\r?$)"),
+        "split": re.compile(rb"^={7}\r?$"), "end": re.compile(rb"^>{7}(?: |\r?$)")}
+
+
+def conflict_blocks(data: bytes) -> tuple[list[bytes | dict], int]:
+    """Split git merge-file --diff3 output into plain text and conflict blocks.
+
+    Returns the parts in order and how many blocks were found. A malformed
+    block is left as plain text, so its markers still block apply.
+    """
+    lines = data.splitlines(keepends=True)
+    parts, plain, index, count = [], [], 0, 0
+    while index < len(lines):
+        if not MARK["start"].match(lines[index]):
+            plain.append(lines[index])
+            index += 1
+            continue
+        sections, current, cursor = {"local": [], "base": [], "upstream": []}, "local", index + 1
+        while cursor < len(lines) and not MARK["end"].match(lines[cursor]):
+            line = lines[cursor]
+            if current == "local" and MARK["base"].match(line):
+                current = "base"
+            elif current in ("local", "base") and MARK["split"].match(line):
+                current = "upstream"
+            elif MARK["start"].match(line):
+                break
+            else:
+                sections[current].append(line)
+            cursor += 1
+        if cursor >= len(lines) or not MARK["end"].match(lines[cursor]) or current != "upstream":
+            plain.append(lines[index])
+            index += 1
+            continue
+        parts.append(b"".join(plain))
+        plain = []
+        parts.append({name: b"".join(value) for name, value in sections.items()})
+        count += 1
+        index = cursor + 1
+    parts.append(b"".join(plain))
+    return parts, count
+
+
+def resolve_block(data: bytes, number: int, take: str) -> bytes:
+    parts, count = conflict_blocks(data)
+    if not 0 <= number < count:
+        raise KeeperError(f"Choose a conflict between 0 and {count - 1}" if count else "This file has no conflict blocks left")
+    seen, output = -1, []
+    for part in parts:
+        if isinstance(part, bytes):
+            output.append(part)
+            continue
+        seen += 1
+        if seen != number:
+            output.append(b"<<<<<<< Your clone\n" + part["local"] + b"||||||| Recorded baseline\n" + part["base"]
+                          + b"=======\n" + part["upstream"] + b">>>>>>> Current upstream\n")
+        elif take == "both":
+            output.append(part["local"] + part["upstream"])
+        else:
+            output.append(part[take])
+    return b"".join(output)
+
+
+def describe_blocks(file: File | None) -> list[dict]:
+    if file is None or not is_text(file.data):
+        return []
+    parts, _ = conflict_blocks(file.data)
+    blocks, offset = [], 1
+    for part in parts:
+        if isinstance(part, bytes):
+            offset += part.count(b"\n")
+            continue
+        blocks.append({"index": len(blocks), "line": offset,
+                       **{name: part[name].decode(errors="replace") for name in ("local", "base", "upstream")}})
+        offset += 4 + sum(part[name].count(b"\n") for name in ("local", "base", "upstream"))
+    return blocks
+
+
 def refuse_git_metadata(path: Path) -> None:
     if any(part.name == ".git" for part in path.rglob(".git")):
         raise KeeperError("Git metadata is not supported in merge candidates")
@@ -160,7 +237,8 @@ class Plans:
             resolution = resolutions.get(path, {})
             resolved = isinstance(resolution, dict) and resolution.get("hash") == tree_hash(family(candidate, path))
             conflicts.append({**conflict, "resolved": resolved,
-                              "resolution": resolution.get("take") if resolved else None})
+                              "resolution": resolution.get("take") if resolved else None,
+                              "blocks": [] if resolved else describe_blocks(candidate.get(path))})
         markers = marker_files(candidate)
         errors = validate_candidate(candidate, record["cloneId"], record["sourceId"])
         if markers:
@@ -255,7 +333,8 @@ class Plans:
             return not resolutions and tree_hash(read_tree(root / "candidate")) == record.get("candidateHash")
         return self.discard(clone_id, untouched)
 
-    def resolve(self, plan_id: str, path: str, take: str | None = None, replacement_file: Path | None = None) -> dict:
+    def resolve(self, plan_id: str, path: str, take: str | None = None, replacement_file: Path | None = None,
+                block: int | None = None) -> dict:
         from .transactions import clone_lock, exchange_directories
         record, _ = self.load(plan_id)
         with clone_lock(self.keeper, record["cloneId"]):
@@ -265,7 +344,13 @@ class Plans:
             if path not in known and not any(name.startswith(path + "/") for name in known):
                 raise KeeperError("Choose a path present in this merge plan")
             candidate = trees["candidate"]
-            if replacement_file is not None:
+            if block is not None:
+                current = candidate.get(path)
+                if current is None or take not in ("local", "upstream", "base", "both"):
+                    raise KeeperError("Choose local, upstream, base or both for a conflict in a candidate file")
+                replacement = {path: File(resolve_block(current.data, block, take), current.mode)}
+                choice = "conflicts"
+            elif replacement_file is not None:
                 replacement = {path: read_file(replacement_file.absolute())}
                 choice = "file"
             elif take == "delete":
@@ -276,7 +361,7 @@ class Plans:
                 replacement, choice = family(trees[take], path), take
             else:
                 raise KeeperError("Choose local, upstream, base, delete, edited, or a replacement file")
-            if marker_files(replacement):
+            if marker_files(replacement) and choice != "conflicts":
                 raise KeeperError("Remove conflict markers before accepting this resolution")
             proposed = replace_family(candidate, path, replacement)
             root = self.path(plan_id)
@@ -306,6 +391,9 @@ class Plans:
             finally:
                 if not exchange_attempted:
                     shutil.rmtree(temporary)
+            if choice == "conflicts" and marker_files(replacement):
+                # Choices remain in this file; it is accepted once the last is made.
+                return self.review(plan_id)
             resolutions = object_json(read_file(root / "resolutions.json").data, "resolutions")
             # Resolving a parent covers its known descendant conflict groups.
             for conflict in record["conflicts"]:

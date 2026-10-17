@@ -128,8 +128,18 @@ directory. Use its plan ID in the following commands (replace `PLAN_ID`):
 # Or: --take upstream, base, delete; or --file /path/to/resolved-file
 ```
 
-Each `--take` choice uses one whole version of the file, including its changes
-outside the conflict. To keep both your edits and upstream's, merge by hand.
+When both sides changed the same lines, `review` lists each overlap with your
+lines and upstream's. Choose them one at a time; the rest of the file stays merged:
+
+```bash
+./bin/clone-keeper resolve PLAN_ID --path BarWidget.qml --conflict 0 --take both
+# --take local, upstream, base (the original lines) or both (yours, then upstream's)
+```
+
+The file counts as resolved once its last overlap is chosen. Without `--conflict`,
+each `--take` choice uses one whole version of the file, including its changes
+outside the conflict. In the panel, **Open in editor** opens the candidate file
+in your Omarchy editor for a manual merge.
 
 For a manual merge, edit the file inside the printed candidate directory and
 accept it with `resolve PLAN_ID --path BarWidget.qml --take edited`. Re-review

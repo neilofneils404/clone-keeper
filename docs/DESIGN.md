@@ -106,6 +106,13 @@ recorded resolutions and an unedited candidate. After an apply, plans prepared
 against baselines other than the new one and the one it replaced are removed;
 status offers to resume only a plan matching the current baseline.
 
+Overlapping text edits reach the candidate as git merge-file --diff3 blocks.
+Reviews list each block's local, original and upstream lines. Resolving block N
+with local, upstream, base or both (local then upstream) rewrites only that block
+through the same candidate exchange; the file's resolution, recorded as
+"conflicts", is saved once no block remains. Malformed blocks are left as text,
+so their markers still block apply.
+
 File/directory collisions resolve as a path family. Choices are local, upstream,
 original, deletion, an external replacement file, or an edited candidate. Resolution
 hashes bind each conflict to its accepted file family; editing it again invalidates
