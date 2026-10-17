@@ -168,6 +168,13 @@ restarts the shell of the desktop session using the same Omarchy installation.
 
 ## Existing clones and missing ancestry
 
+Each time the panel loads (at shell start and after any plugin change, including
+a clone made from Omarchy's own *Setup → Plugins* menu), Clone Keeper runs
+`sync`. It saves the running release's built-in sources, so they stay available
+after the next upgrade, and starts tracking any clone that is still identical to
+a recorded release. Only customized clones made before Clone Keeper need the steps
+below.
+
 For a clone still identical to its current source, apart from generated identity:
 
 ```bash
@@ -219,6 +226,7 @@ Use a saved review for the additional QML syntax check.
 | `~/.config/omarchy/plugins` | Read clones; create/apply/undo change an explicitly selected clone |
 | `$XDG_STATE_HOME/clone-keeper` (default `~/.local/state/clone-keeper`) | Baselines, saved plans, transaction backups, detached-operation outcomes and locks |
 | `~/.config/omarchy/.clone-keeper-staging` | Whole clone directories retained by transactions |
+| `<state>/releases` | Built-in sources of each Omarchy release seen running, stored once per content hash |
 | `<state>/.staging` | Baseline directories retained by transactions |
 
 Snapshots may contain private customizations. State is local, and no telemetry

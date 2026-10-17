@@ -64,6 +64,12 @@ def main():
     manifest.update(id="demo.audio", name="My Audio", omarchy={"clonedFrom": "omarchy.audio"})
     manifest["barWidget"]["displayName"] = "My Audio"
     (audio_clone / "manifest.json").write_text(json.dumps(manifest))
+    # An unedited copy made outside Clone Keeper is tracked when the panel loads;
+    # the customized one needs its original found and confirmed.
+    shutil.copytree(audio_clone, plugins / "demo.audio-copy")
+    manifest.update(id="demo.audio-copy", name="Audio Copy")
+    (plugins / "demo.audio-copy/manifest.json").write_text(json.dumps(manifest))
+    (audio_clone / "BarWidget.qml").write_text(original_qml.replace("showDate: true", "showDate: false"))
     before = original_qml.replace('"HH:mm"', '"hh:mm AP"')
     (plugins / "demo.clock/BarWidget.qml").write_text(before)
     (plugins / "demo.clock/assets/pixel.bin").write_bytes(b"\0local")
@@ -148,9 +154,11 @@ ShellRoot {
       if (test.ticks > 400) { test.check(false, "timeout"); return }
       if (test.failed || keeper.busy || test.capturing) return
       switch (test.step) {
-      case 0: keeper.refreshStatus(); test.step++; break
+      case 0: keeper.startup(); test.step++; break
       case 1:
-        if (!test.check(keeper.hasLoaded && keeper.clones.length === 2, "initial status")) return
+        if (!test.check(keeper.hasLoaded && keeper.clones.length === 3, "initial status")) return
+        if (!test.check(keeper.clones.filter(function(item) { return item.id === "demo.audio-copy" && item.tracked }).length === 1
+                        && keeper.notice.indexOf("demo.audio-copy") !== -1, "sync tracks unedited clone")) return
         test.capture("01-clones"); test.step++; break
       // Selecting an untracked clone searches for its original by itself.
       case 2: keeper.selectClone("demo.audio"); test.step = 100; break

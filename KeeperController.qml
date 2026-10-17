@@ -102,7 +102,8 @@ QtObject {
       "resolve": "Updating your resolution…", "apply": "Applying reviewed changes…",
       "undo": "Restoring the previous version…", "recover": "Recovering the interrupted change…",
       "history": "Loading history…", "enable": "Enabling your clone…",
-      "dismiss": "Checking clones…", "restart": "Restarting the Omarchy shell…"
+      "dismiss": "Checking clones…", "restart": "Restarting the Omarchy shell…",
+      "sync": "Checking clones…"
     }
     return busy ? String(labels[operation] || "Working…") : ""
   }
@@ -116,6 +117,11 @@ QtObject {
   }
 
   function refreshStatus() { root.run("status", ["status", "--json"], true) }
+
+  // Omarchy loads this panel at shell start and after every plugin change.
+  // Sync keeps each running release's sources and tracks unedited clones,
+  // including ones made from Omarchy's own menu, then status is shown.
+  function startup() { root.run("sync", ["sync", "--json"], true, true) }
 
   // A shown outcome belongs to that viewing; reopening starts from status.
   onPanelOpenChanged: if (!panelOpen) { root.notice = ""; root.restartSuggested = false }
@@ -410,6 +416,13 @@ QtObject {
     var result = null
     try { result = JSON.parse(root.response) } catch (error) { }
     if (root.operation === "dismiss") return
+    if (root.operation === "sync") {
+      // A failed sync must not hide the clones; status reports their state.
+      if (result && Array.isArray(result.tracked) && result.tracked.length > 0)
+        root.notice = "Now tracking " + result.tracked.join(", ") + ": unedited copies of a recorded Omarchy release."
+      Qt.callLater(root.refreshStatus)
+      return
+    }
     if (result && result.requestId) root.shownRequests = root.shownRequests.concat([String(result.requestId)])
     if (root.processExitCode !== 0 || !result || result.error) {
       if (result && result.requestId) root.dismiss([String(result.requestId)])

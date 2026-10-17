@@ -48,10 +48,22 @@ aggregate hash. Every baseline read verifies its inventory.
 - verified-current-source: an unchanged existing clone matches current source.
 - user-supplied-original: the owner supplies its known historical ancestor.
 - historical-release-source: the owner confirms one of the Omarchy releases found
-  on this machine (installed tree, pacman package cache, or a supplied tree or
-  package). The record keeps the evidence shown: release versions and archive
+  on this machine (installed tree, recorded releases, pacman package cache, or a
+  supplied tree or package). The record keeps the evidence shown: release versions and archive
   hashes, the clone's creation time, the release installed then according to
   pacman's log, and which files still matched.
+
+- verified-release-source: an untracked clone is byte-identical to a release's
+  source. sync records this without asking: an ancestor equal to the clone merges
+  as a fast-forward whichever release it is labelled with.
+
+sync runs when the panel loads. It records the installed release's materialized
+sources at releases/<source id>/<tree hash>/, appending the version to an existing
+identical tree, under a non-blocking lock so several bars do not repeat the work.
+It then checks untracked clones against the installed tree and recorded releases
+only; reading package archives is left to an explicit origins search. sync writes
+only Clone Keeper state. Recorded trees are verified against their inventory on
+every read.
 
 Finding origins is read-only. Candidates are ranked by whether their release was
 installed when the clone directory was created, then by fewest differing lines.

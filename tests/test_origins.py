@@ -110,5 +110,93 @@ class OriginTests(unittest.TestCase):
         self.origins("--search", self.root / "missing", success=False)
 
 
+class SyncTests(unittest.TestCase):
+    """Sources recorded while a release runs remain available after upgrades."""
+
+    def setUp(self):
+        fixture = test_cli.CloneKeeperIntegrationTests(methodName="runTest")
+        fixture.setUp()
+        self.addCleanup(fixture.doCleanups)
+        for name in ("root", "omarchy", "source", "clone", "state", "replace", "run_json", "preview",
+                     "assert_clean_preview"):
+            setattr(self, name, getattr(fixture, name))
+        self.cache = self.root / "pkg"
+        self.cache.mkdir()
+        self.log = self.root / "pacman.log"
+        self.log.write_text("")
+
+    def cli(self, *arguments, success=True):
+        return self.run_json("--package-cache", self.cache, "--pacman-log", self.log, *arguments, success=success)
+
+    def upgrade(self, version):
+        (self.omarchy / "version").write_text(version + "\n")
+        self.replace(self.source, "Original farewell", "Upstream farewell")
+
+    def test_records_each_tree_once_and_lists_its_releases(self):
+        first = self.cli("sync")
+        self.assertEqual(first["recorded"], [test_cli.SOURCE_ID])
+        self.assertEqual(self.cli("sync")["recorded"], [])
+        (self.omarchy / "version").write_text("4.0.2\n")
+        self.assertEqual(self.cli("sync")["recorded"], [])
+        records = list((self.state / "releases" / test_cli.SOURCE_ID).iterdir())
+        self.assertEqual(len(records), 1)
+        meta = test_cli.json.loads((records[0] / "record.json").read_text())
+        self.assertEqual(meta["versions"], ["4.0.1", "4.0.2"])
+        self.upgrade("4.0.3")
+        self.assertEqual(self.cli("sync")["recorded"], [test_cli.SOURCE_ID])
+
+    def test_tracks_unedited_clone_immediately(self):
+        result = self.cli("sync")
+        self.assertEqual(result["tracked"], [CLONE_ID])
+        self.assertEqual(self.cli("sync")["tracked"], [])
+
+    def test_tracks_unedited_clone_after_upgrade(self):
+        # Made while 4.0.1 ran, but first seen after the upgrade.
+        hidden = self.root / "hidden-clone"
+        self.clone.rename(hidden)
+        self.cli("sync")
+        hidden.rename(self.clone)
+        self.upgrade("4.0.2")
+        result = self.cli("sync")
+        self.assertEqual(result["tracked"], [CLONE_ID])
+        record = test_cli.json.loads((self.state / "clones" / CLONE_ID / "record.json").read_text())
+        self.assertEqual(record["provenance"], "verified-release-source")
+        self.assertEqual(record["evidence"]["versions"], ["4.0.1"])
+        preview = self.preview()
+        self.assert_clean_preview(preview)
+        self.assertEqual([change["path"] for change in preview["changes"]], ["BarWidget.qml"])
+
+    def test_customized_clone_is_not_tracked_but_its_original_is_found(self):
+        self.replace(self.clone, "Original greeting", "Local greeting")
+        self.cli("sync")
+        self.upgrade("4.0.2")
+        self.assertEqual(self.cli("sync")["tracked"], [])
+        self.assertFalse((self.state / "clones" / CLONE_ID).exists())
+        found = self.cli("origins", CLONE_ID)
+        recorded = next(item for item in found["candidates"] if "4.0.1" in item["versions"])
+        self.assertEqual(recorded["releases"][0]["kind"], "recorded")
+        self.assertEqual(recorded["changedFiles"], ["BarWidget.qml"])
+        self.cli("track", CLONE_ID, "--origin", "4.0.1", "--expect", recorded["baselineHash"])
+        self.assert_clean_preview(self.preview())
+
+    def test_damaged_release_record_is_reported(self):
+        self.replace(self.clone, "Original greeting", "Local greeting")
+        self.cli("sync")
+        self.upgrade("4.0.2")
+        record = next((self.state / "releases" / test_cli.SOURCE_ID).iterdir())
+        (record / "tree" / "BarWidget.qml").write_text("tampered\n")
+        result = self.cli("sync")
+        self.assertEqual(result["tracked"], [])
+        self.assertTrue(any("integrity" in error["message"] for error in result["errors"]), result)
+
+    def test_concurrent_sync_is_skipped(self):
+        import fcntl, os
+        self.state.mkdir()
+        lock = os.open(self.state / ".releases.lock", os.O_RDWR | os.O_CREAT)
+        self.addCleanup(os.close, lock)
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        self.assertTrue(self.cli("sync")["skipped"])
+
+
 if __name__ == "__main__":
     unittest.main()

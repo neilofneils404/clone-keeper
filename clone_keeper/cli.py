@@ -31,7 +31,8 @@ def parser():
         "status": "Discover clones and compare their recorded baselines", "sources": "List built-in sources for new clones",
         "clone": "Create a disabled clone and capture its original baseline", "enable": "Enable an installed clone",
         "track": "Record a verified or explicitly supplied original baseline",
-        "origins": "Find a clone's likely original among Omarchy releases on this machine", "preview": "Inspect a merge without saving a plan",
+        "origins": "Find a clone's likely original among Omarchy releases on this machine",
+        "sync": "Record the running release's sources and track clones identical to one", "preview": "Inspect a merge without saving a plan",
         "export": "Export a clean candidate to a new directory", "prepare": "Save a merge plan for review and resolution",
         "plans": "List saved merge plans", "review": "Review a saved plan and detect stale inputs",
         "resolve": "Choose a conflict resolution or accept an edited candidate", "apply": "Apply the exact reviewed candidate with recovery and undo",
@@ -138,6 +139,16 @@ def human(result, command):
             print(f"    track {result['cloneId']} --origin {item['versions'][-1]} --expect {item['baselineHash']}")
         for error in result["errors"]:
             print(f"Note: {error['message']}", file=sys.stderr)
+    elif command == "sync":
+        if result["skipped"]:
+            print("Another sync is running.")
+        else:
+            print(f"Recorded Omarchy {result['version']} sources"
+                  + (f" ({len(result['recorded'])} new)." if result["recorded"] else "; already up to date."))
+        for clone_id in result["tracked"]:
+            print(f"Now tracking {clone_id}: it is identical to a recorded release.")
+        for error in result["errors"]:
+            print(f"Skipped {error['path']}: {error['message']}", file=sys.stderr)
     elif command == "track":
         print(f"Tracking {result['cloneId']} from {result['provenance']}.")
         print(f"Baseline: {result['baselineHash']} ({result['statePath']})")
@@ -168,6 +179,8 @@ def execute(args, keeper, work):
         return result
     if command == "enable":
         return work.enable(args.clone_id)
+    if command == "sync":
+        return work.sync(Origins(keeper, args.package_cache, args.pacman_log))
     if command == "origins":
         return Origins(keeper, args.package_cache, args.pacman_log).find(args.clone_id, args.search)
     if command == "track":

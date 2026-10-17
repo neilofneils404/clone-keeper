@@ -27,7 +27,7 @@ Ui.Panel {
   onOpenedChanged: keeperController.panelOpen = root.opened
 
   KeeperController { id: keeperController }
-  Component.onCompleted: Qt.callLater(keeperController.refreshStatus)
+  Component.onCompleted: Qt.callLater(keeperController.startup)
 
   Ui.KeyboardPanel {
     id: panel

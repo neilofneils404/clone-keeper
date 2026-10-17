@@ -7,15 +7,18 @@ directories that are removed afterwards.
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 import difflib
+import fcntl
 import hashlib
+import os
 from pathlib import Path
 import re
 import shutil
 import subprocess
 import tempfile
 
-from .core import (KeeperError, Keeper, as_clone, changed_files, clone_identity,
-                   is_text, tree_hash)
+from .core import (File, KeeperError, Keeper, as_clone, atomic_new_tree, changed_files,
+                   clone_identity, inventory, is_text, json_bytes, no_symlink_path,
+                   object_json, plugin_id, read_file, read_tree, tree_hash)
 
 PACKAGES = ("omarchy", "omarchy-dev")
 PACKAGE_FILE = re.compile(r"^(omarchy(?:-dev)?)-([^-]+-[^-]+)-[^-]+\.pkg\.tar\.(?:zst|xz)$")
@@ -136,42 +139,131 @@ def changed_lines(before, after) -> int:
     return total
 
 
+class ReleaseStore:
+    """Built-in sources of each Omarchy release seen running, kept past upgrades.
+
+    Trees are stored once per content hash at releases/<source id>/<hash>/ and
+    list every release version that shipped them.
+    """
+
+    def __init__(self, keeper: Keeper):
+        self.keeper = keeper
+        self.root = keeper.state_dir / "releases"
+
+    def record(self) -> dict:
+        """Save the installed release's sources; another recorder running is fine."""
+        self.keeper.protect_destination(self.root, state=True)
+        no_symlink_path(self.keeper.state_dir)
+        self.keeper.state_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+        version = self.keeper.version()
+        added, errors = [], []
+        lock = os.open(self.keeper.state_dir / ".releases.lock", os.O_RDWR | os.O_CREAT | os.O_CLOEXEC, 0o600)
+        try:
+            try:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                return {"version": version, "recorded": [], "errors": [], "skipped": True}
+            for source_id, source in sorted(self.keeper.sources().items()):
+                try:
+                    if self._record_one(source_id, source.materialize(), version):
+                        added.append(source_id)
+                except (KeeperError, OSError, ValueError) as exc:
+                    errors.append({"path": str(source.path), "message": str(exc)})
+        finally:
+            os.close(lock)
+        return {"version": version, "recorded": added, "errors": errors, "skipped": False}
+
+    def _record_one(self, source_id, tree, version):
+        digest = tree_hash(tree)
+        path = self.root / plugin_id(source_id) / digest
+        if path.exists():
+            meta = self._meta(path, source_id, digest)
+            if version in meta["versions"]:
+                return False
+            from .plans import atomic_json
+            meta["versions"].append(version)
+            atomic_json(path / "record.json", meta)
+            return False
+        meta = {"schemaVersion": 1, "sourceId": source_id, "treeHash": digest, "versions": [version],
+                "recordedAt": datetime.now(timezone.utc).isoformat(), "files": inventory(tree)}
+        atomic_new_tree(path, {"record.json": File(json_bytes(meta), 0o600),
+                               **{"tree/" + name: file for name, file in tree.items()}})
+        return True
+
+    @staticmethod
+    def _meta(path, source_id, digest):
+        meta = object_json(read_file(path / "record.json").data, str(path))
+        if meta.get("schemaVersion") != 1 or meta.get("sourceId") != source_id or meta.get("treeHash") != digest \
+                or not isinstance(meta.get("versions"), list):
+            raise KeeperError(f"Invalid release record: {path}")
+        return meta
+
+    def trees(self, source_id):
+        """Verified (record, tree) pairs saved for one built-in."""
+        directory = self.root / plugin_id(source_id)
+        no_symlink_path(directory)
+        if not directory.is_dir():
+            return
+        for path in sorted(directory.iterdir()):
+            if path.name.startswith("."):
+                continue
+            meta = self._meta(path, source_id, path.name)
+            tree = read_tree(path / "tree")
+            if inventory(tree) != meta["files"] or tree_hash(tree) != meta["treeHash"]:
+                raise KeeperError(f"Release record integrity check failed: {path}")
+            yield path, meta, tree
+
+
 class Origins:
     def __init__(self, keeper: Keeper, package_cache: Path, pacman_log: Path):
         self.keeper = keeper
         self.package_cache = package_cache
         self.pacman_log = pacman_log
 
-    def releases(self, extra=()) -> list[Release]:
+    def releases(self, extra=(), packages=True) -> list[Release]:
         installed = Release(self.keeper.version(), "installed", self.keeper.omarchy_path)
-        return [installed, *cached_packages(self.package_cache), *map(supplied, extra)]
+        return [installed, *(cached_packages(self.package_cache) if packages else ()), *map(supplied, extra)]
+
+    def _originals(self, source_id, extra, packages, problems):
+        """Yield (release description, materialized source) for every place it is kept."""
+        for release in self.releases(extra, packages):
+            with tempfile.TemporaryDirectory(prefix="clone-keeper-origin-") as scratch:
+                try:
+                    source = _release_sources(release, Path(scratch)).get(source_id)
+                    tree = source.materialize() if source else None
+                except (KeeperError, OSError, subprocess.TimeoutExpired) as exc:
+                    problems.append({"path": str(release.path), "message": str(exc)})
+                    continue
+            if tree is not None:
+                yield [{"version": release.version, "kind": release.kind, "path": str(release.path),
+                        "sha256": release.sha256}], tree
+        try:
+            for path, meta, tree in ReleaseStore(self.keeper).trees(source_id):
+                yield [{"version": version, "kind": "recorded", "path": str(path), "sha256": None}
+                       for version in meta["versions"]], tree
+        except (KeeperError, OSError) as exc:
+            problems.append({"path": str(self.keeper.state_dir / "releases"), "message": str(exc)})
 
     def find(self, clone_id: str, extra=()) -> dict:
         """Rank original candidates for a clone by how much of it they explain."""
         return self._find(clone_id, extra)[0]
 
-    def _find(self, clone_id, extra):
+    def _find(self, clone_id, extra, packages=True):
         path, local, value, source_id = self.keeper.clone(clone_id)
         identity = clone_identity(value)
         timeline = pacman_timeline(self.pacman_log)
         created = birth_time(path)
         expected = version_at(timeline, created) if created and timeline else None
         groups, trees, problems = {}, {}, []
-        for release in self.releases(extra):
-            with tempfile.TemporaryDirectory(prefix="clone-keeper-origin-") as scratch:
-                try:
-                    source = _release_sources(release, Path(scratch)).get(source_id)
-                    if source is None:
-                        continue
-                    base = as_clone(source.materialize(), identity, source_id)
-                except (KeeperError, OSError, subprocess.TimeoutExpired) as exc:
-                    problems.append({"path": str(release.path), "message": str(exc)})
-                    continue
+        for releases, original in self._originals(source_id, extra, packages, problems):
+            try:
+                base = as_clone(original, identity, source_id)
+            except KeeperError as exc:
+                problems.append({"path": releases[0]["path"], "message": str(exc)})
+                continue
             digest = tree_hash(base)
             trees[digest] = base
-            group = groups.setdefault(digest, {"baselineHash": digest, "releases": []})
-            group["releases"].append({"version": release.version, "kind": release.kind,
-                                      "path": str(release.path), "sha256": release.sha256})
+            groups.setdefault(digest, {"baselineHash": digest, "releases": []})["releases"].extend(releases)
         candidates = []
         for group in groups.values():
             base = trees[group["baselineHash"]]
@@ -188,10 +280,23 @@ class Origins:
         if expected and not any(item["timelineMatch"] for item in candidates):
             problems.append({"path": str(self.package_cache),
                              "message": f"Omarchy {expected} was installed when this clone was created, but its "
-                                        "package is not available here. Supply that release's tree or package."})
+                                        "source is not available here. Supply that release's tree or package."})
         return ({"cloneId": clone_id, "sourceId": source_id, "clonePath": str(path),
                  "cloneCreatedAt": created.isoformat() if created else None,
                  "installedAtCreation": expected, "candidates": candidates, "errors": problems}, trees)
+
+    def exact(self, clone_id: str):
+        """A recorded release this clone is byte-identical to, without reading packages.
+
+        Merging from an ancestor equal to the clone is a fast-forward whichever
+        release that tree is labelled with, so no confirmation is needed.
+        """
+        found, trees = self._find(clone_id, (), packages=False)
+        match = next((item for item in found["candidates"] if not item["changedFiles"]), None)
+        if match is None:
+            return None, found["errors"]
+        evidence = {"versions": match["versions"], "releases": match["releases"], "exactMatch": True}
+        return (trees[match["baselineHash"]], "Omarchy " + match["versions"][-1], evidence), found["errors"]
 
     def baseline(self, clone_id: str, version: str, expect: str, extra=()):
         """Re-find the confirmed candidate so the stored tree is exactly what was shown."""

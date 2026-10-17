@@ -11,6 +11,7 @@ from .core import (File, KeeperError, as_clone, atomic_new_tree, inventory,
                    json_bytes, manifest, no_symlink_path, object_json,
                    plugin_id, read_file, tree_hash, validate_candidate)
 from .operations import Operations
+from .origins import ReleaseStore
 from .plans import Plans, atomic_json
 from .transactions import Transactions, clone_lock
 
@@ -113,6 +114,33 @@ class Workflow:
     def track(self, ident, baseline=None, origin=None):
         with clone_lock(self.keeper, ident):
             return self.keeper.track(ident, baseline, origin)
+
+    def sync(self, origins):
+        """Record the running release's sources and track clones identical to one.
+
+        Runs whenever the panel loads, which Omarchy does at shell start and
+        after any plugin change, including clones made from its own menu.
+        It writes only Clone Keeper state, never installed plugins.
+        """
+        result = ReleaseStore(self.keeper).record()
+        result["tracked"] = []
+        if result["skipped"]:
+            return result
+        for row in self.keeper.status()["clones"]:
+            if row["tracked"] or row["status"] != "untracked":
+                continue
+            try:
+                with clone_lock(self.keeper, row["id"]):
+                    if self.keeper.state_path(row["id"]).exists():
+                        continue
+                    match, errors = origins.exact(row["id"])
+                    result["errors"].extend(errors)
+                    if match is not None:
+                        self.keeper.track(row["id"], origin=match)
+                        result["tracked"].append(row["id"])
+            except (KeeperError, OSError, ValueError) as exc:
+                result["errors"].append({"path": row["path"], "message": str(exc)})
+        return result
 
     def clone_id_for(self, source_id, clone_id=None):
         plugin_id(source_id)

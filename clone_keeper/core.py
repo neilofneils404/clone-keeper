@@ -524,7 +524,7 @@ class Keeper:
         evidence = None
         if origin is not None:
             base, version, evidence = origin
-            provenance = "historical-release-source"
+            provenance = "verified-release-source" if evidence.get("exactMatch") else "historical-release-source"
         elif baseline is None:
             source = self.sources().get(source_id)
             if source is None:
