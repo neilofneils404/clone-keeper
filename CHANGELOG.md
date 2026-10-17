@@ -24,6 +24,10 @@
 - Resolve overlapping lines one conflict at a time with Keep yours, Take upstream,
   Keep both or Use original (`resolve --conflict N`); the rest of the file stays
   merged. **Open in editor** hands a candidate file to your Omarchy editor (`edit`).
+- Status warns when Omarchy removed a shell component or member a tracked clone
+  uses since its baseline's release; the panel shows it with the clone.
+- Reviews use the installed Omarchy's own manifest validator, and no longer refuse
+  the bar sections newer releases add (`centerBegin`, `centerEnd`, `tray`).
 - `prune` lists, and with `--yes` removes, old transactions, reviews of removed
   clones and old recorded releases; **Clean up old history…** in the panel.
 

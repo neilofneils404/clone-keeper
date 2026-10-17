@@ -75,6 +75,7 @@ class Workflow:
         result["operations"] = operations
         result["errors"].extend(errors)
         result["live"] = self.is_live()
+        self._host_warnings(result)
         enabled = self._enabled_plugins()
         for row in result["clones"]:
             running = next((item["operation"] for item in operations
@@ -99,6 +100,26 @@ class Workflow:
             except (KeeperError, OSError, ValueError, KeyError, TypeError) as exc:
                 row.update(status="error", message=str(exc), canUndo=False)
         return result
+
+    def _host_warnings(self, result):
+        """Shell components each tracked clone uses that its baseline's release had and this one lacks."""
+        from . import host
+        current, after = result["upstreamVersion"], None
+        for row in result["clones"]:
+            row["hostWarnings"] = []
+            if not row["tracked"] or row["status"] == "error":
+                continue
+            try:
+                meta, _ = self.keeper.load_baseline(row["id"])
+                release = host.baseline_release(meta)
+                before = host.load(self.keeper, release) if release and release != current else None
+                if before is None:
+                    continue
+                if after is None:
+                    after = host.fingerprint(self.keeper.omarchy_path)
+                row["hostWarnings"] = host.warnings(self.keeper.clone(row["id"])[1], before, after)
+            except (KeeperError, OSError, ValueError, KeyError) as exc:
+                result["errors"].append({"path": row["path"], "message": str(exc)})
 
     def _enabled_plugins(self):
         """Read activation state from the live shell; unknown when unavailable."""

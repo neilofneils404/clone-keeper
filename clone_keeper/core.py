@@ -380,6 +380,9 @@ def file_diff(path: str, local: File | None, candidate: File | None) -> str:
     return diff
 
 
+SECTIONS = ("left", "centerBegin", "center", "centerEnd", "tray", "right")
+
+
 def validate_candidate(tree: Tree, clone_id: str, source_id: str) -> list[str]:
     errors = []
     for path in tree:
@@ -418,8 +421,10 @@ def validate_candidate(tree: Tree, clone_id: str, source_id: str) -> list[str]:
         except KeeperError as exc:
             errors.append(str(exc))
     widget = value.get("barWidget")
-    if isinstance(widget, dict) and widget.get("defaultSection", "right") not in ("left", "center", "right"):
-        errors.append("barWidget.defaultSection must be left, center, or right")
+    # The installed omarchy-plugin-validate is authoritative during review; this
+    # superset only catches values no Omarchy release has accepted.
+    if isinstance(widget, dict) and widget.get("defaultSection", "right") not in SECTIONS:
+        errors.append("barWidget.defaultSection must be one of " + ", ".join(SECTIONS))
     return sorted(set(errors))
 
 

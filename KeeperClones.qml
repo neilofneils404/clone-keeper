@@ -105,6 +105,15 @@ Column {
       muted: true
       text: root.keeper.selectedClone ? String(root.keeper.selectedClone.message || "") : ""
     }
+    KeeperText {
+      width: parent.width
+      readonly property var notes: root.keeper.selectedClone ? (root.keeper.selectedClone.hostWarnings || []) : []
+      visible: notes.length > 0
+      small: true
+      warning: true
+      text: "Omarchy changed shell components this clone uses since its baseline. Check that it still works:\n"
+        + notes.join("\n")
+    }
     Ui.TextField {
       width: parent.width
       text: root.keeper.selectedClone ? String(root.keeper.selectedClone.path || "") : ""

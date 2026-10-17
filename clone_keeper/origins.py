@@ -170,6 +170,11 @@ class ReleaseStore:
                 except (KeeperError, OSError, ValueError) as exc:
                     errors.append({"path": str(source.path), "message": str(exc)})
             try:
+                from . import host
+                host.record(self.keeper, version)
+            except (KeeperError, OSError, ValueError) as exc:
+                errors.append({"path": str(self.keeper.omarchy_path / "shell"), "message": str(exc)})
+            try:
                 order = self.versions()
                 if version not in order:
                     from .plans import atomic_json

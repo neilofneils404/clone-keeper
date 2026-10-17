@@ -243,7 +243,9 @@ class Plans:
         errors = validate_candidate(candidate, record["cloneId"], record["sourceId"])
         if markers:
             errors.append("Unresolved conflict markers in: " + ", ".join(markers))
-        from .validation import check_qml
+        from .validation import check_manifest, check_qml
+        if not errors:
+            errors.extend(check_manifest(candidate, self.keeper.omarchy_path))
         syntax = check_qml(candidate) if not errors else {"available": False, "checked": 0, "errors": [], "message": "Resolve structural errors and conflict markers before syntax checking."}
         errors.extend(syntax["errors"])
         changes = []

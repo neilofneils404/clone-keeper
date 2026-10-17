@@ -135,6 +135,19 @@ Reviews compare current clone, baseline and upstream hashes with their snapshots
 and mark changed inputs stale. Apply requires the candidate hash the user reviewed;
 the panel additionally supplies a plan metadata hash.
 
+## Shell changes and manifest validation
+
+sync also records, once per release, the names each shell/Ui and shell/Commons
+component declares (properties, signals and functions) at releases/.host/. Status
+compares the fingerprint of a tracked clone's baseline release with the installed
+shell and lists components the clone uses that are gone, or removed members it
+uses as `.name`, `name:` or `name(`. This is a name comparison, not type checking;
+additions are not reported. Baselines without a known release are not checked.
+
+Reviews run the matching Omarchy's omarchy-plugin-validate on the candidate when
+it is installed; it reads files with jq. Without it, the built-in check accepts
+every bar section any release accepts, so newer layouts are not refused.
+
 ## Pruning
 
 prune is a dry run unless --yes is given. Transactions beyond the newest N per

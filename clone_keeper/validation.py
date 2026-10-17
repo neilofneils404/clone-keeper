@@ -8,6 +8,25 @@ import tempfile
 from .core import KeeperError, write_tree
 
 
+def check_manifest(tree, omarchy_path: Path):
+    """Run the matching Omarchy's own manifest validator, which only reads files."""
+    validator = omarchy_path / "bin" / "omarchy-plugin-validate"
+    if not validator.is_file():
+        return []
+    with tempfile.TemporaryDirectory(prefix="clone-keeper-validate-") as temporary:
+        root = Path(temporary) / "plugin"
+        root.mkdir()
+        write_tree(root, tree)
+        try:
+            result = subprocess.run([str(validator), str(root)], text=True, capture_output=True, timeout=30)
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise KeeperError(f"Omarchy's plugin validator could not complete: {exc}") from exc
+    if result.returncode == 0:
+        return []
+    message = (result.stderr.strip() or result.stdout.strip() or "invalid plugin").replace(str(root), "candidate")
+    return ["Omarchy's validator: " + message.removeprefix("omarchy-plugin-validate: ")]
+
+
 def check_qml(tree):
     files = sorted(name for name in tree if name.endswith((".qml", ".js")))
     if not files:
