@@ -64,7 +64,10 @@ desktop pilot; see [validation](docs/VALIDATION.md) for its findings.
 
 ## Requirements and installation
 
-Linux, Python 3.11+, and Git are required. The panel needs Omarchy's plugin-capable
+Linux, Python 3.11+, and Git are required. Finding originals in pacman's package
+cache uses `bsdtar` (libarchive, installed with pacman). Shell restarts, logs,
+notifications and editor or agent hand-offs use Omarchy's own commands and
+Quickshell's `qs`. The panel needs Omarchy's plugin-capable
 Quickshell desktop; it is tested with **Omarchy 4.0.4** (Qt 6.11). It uses
 Omarchy's shared panel components, shell IPC and clone layout, which may still change
 between Omarchy releases. Optional **Qt 6 qmllint** checks candidate QML/JavaScript syntax;
