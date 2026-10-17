@@ -128,6 +128,19 @@ Reviews compare current clone, baseline and upstream hashes with their snapshots
 and mark changed inputs stale. Apply requires the candidate hash the user reviewed;
 the panel additionally supplies a plan metadata hash.
 
+## Loading check after apply
+
+apply --restart-shell, which the panel passes for an enabled live clone, runs in
+the detached worker after a successful apply: Omarchy reloads the panel during
+apply, and the worker's own session survives `quickshell kill`. It waits for
+omarchy-restart-shell, allows plugin components time to load, then reads the new
+instance's log with `qs log -p <omarchy>/shell`. Lines naming the clone's
+directory or the shell's plugin-failure messages for its ID (bounded so a longer
+ID does not match) are split into load failures and other messages. Load failures
+undo the transaction and restart again; undo's own checks still refuse edits made
+since apply. Other messages are reported only. A refused restart, such as while
+the session is locked, keeps the update with a warning.
+
 ## Apply transaction
 
 Per-clone flock locks serialize Clone Keeper writers. Omarchy source, installed

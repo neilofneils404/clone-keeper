@@ -76,6 +76,8 @@ def parser():
         elif name == "apply":
             command.add_argument("--expect", required=True, help="Exact candidateHash from the reviewed plan")
             command.add_argument("--expect-plan", help="Optional planHash from the reviewed plan")
+            command.add_argument("--restart-shell", action="store_true",
+                                 help="Restart the shell to load the update, and undo it if the clone fails to load")
         elif name == "sync":
             command.add_argument("--notify", action="store_true",
                                  help="Send a desktop notification once for each new upstream change")
@@ -207,7 +209,12 @@ def execute(args, keeper, work):
     if command == "resolve":
         return work.plans.resolve(args.plan_id, args.path, args.take, args.file)
     if command == "apply":
-        return work.refresh(work.transactions.apply(args.plan_id, args.expect, args.expect_plan))
+        if args.restart_shell and not work.is_live():
+            raise KeeperError("--restart-shell is only available for the installed user plugin directory")
+        result = work.refresh(work.transactions.apply(args.plan_id, args.expect, args.expect_plan))
+        if args.restart_shell:
+            result.update(work.verify_update(result["cloneId"]))
+        return result
     if command == "history":
         return work.transactions.history(args.clone_id)
     if command == "undo":

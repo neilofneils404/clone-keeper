@@ -274,7 +274,7 @@ class Workflow:
             result["warning"] = "Files were saved, but the shell could not refresh: " + str(exc)
         return result
 
-    def restart_shell(self):
+    def restart_shell(self, wait=False):
         """Start Omarchy's own shell restart, which loads updated plugin code.
 
         A live rescan reloads plugins, but changed QML is not reliably rebuilt
@@ -289,12 +289,47 @@ class Workflow:
         session = self._session_omarchy_path()
         if session is None or Path(session).resolve() != self.keeper.omarchy_path.resolve():
             raise KeeperError("The desktop session uses a different Omarchy installation; restart its shell yourself")
+        if wait:
+            # A detached worker outlives the shell it restarts and waits for the new one.
+            try:
+                process = subprocess.run(["omarchy-restart-shell"], stdin=subprocess.DEVNULL,
+                                         capture_output=True, text=True, timeout=90)
+            except (OSError, subprocess.TimeoutExpired) as exc:
+                raise KeeperError(f"Could not restart the Omarchy shell: {exc}") from exc
+            if process.returncode:
+                raise KeeperError(process.stderr.strip() or "omarchy-restart-shell failed")
+            return {"message": "Restarted the Omarchy shell."}
         try:
             subprocess.Popen(["omarchy-restart-shell"], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                              stderr=subprocess.DEVNULL, start_new_session=True)
         except OSError as exc:
             raise KeeperError(f"Could not start omarchy-restart-shell: {exc}") from exc
         return {"message": "Restarting the Omarchy shell."}
+
+    def verify_update(self, clone_id):
+        """After applying to an enabled clone, load it and undo the update if it fails to load."""
+        from .health import restart_and_check
+        try:
+            health = restart_and_check(self, clone_id)
+        except KeeperError as exc:
+            return {"restarted": False, "warning": f"Applied, but the update could not be checked in a restarted shell: {exc}"}
+        if health["healthy"]:
+            return {"restarted": True, "health": health,
+                    "message": "Updated, and the restarted shell loaded it. The previous version is available in Undo."}
+        first = health["failures"][0]
+        try:
+            self.transactions.undo(clone_id)
+        except KeeperError as exc:
+            return {"restarted": True, "health": health, "undone": False,
+                    "warning": f"The update kept {clone_id} from loading ({first}), and undoing it failed: {exc}. "
+                               "Use Undo or recover it."}
+        result = {"restarted": True, "health": health, "undone": True,
+                  "message": f"The update kept {clone_id} from loading, so it was undone. Shell log: {first}"}
+        try:
+            self.restart_shell(wait=True)
+        except KeeperError as exc:
+            result["warning"] = f"Restart the Omarchy shell to load the restored version: {exc}"
+        return result
 
     @staticmethod
     def _session_omarchy_path():

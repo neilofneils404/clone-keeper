@@ -16,6 +16,11 @@
   says so once; clicking it opens Clone Keeper. Turn it off with the widget's
   Update notifications setting. `omarchy-shell neil.clone-keeper open` opens the panel.
 - Linked development plugins that are not clones no longer produce status errors.
+- **Update** applies a clean update in one step: it prepares the plan and confirms
+  that exact result, or opens the review when choices are needed.
+- Applying to an enabled clone restarts the shell, checks its log for the clone's
+  load failures and undoes the update automatically if it failed to load
+  (`apply --restart-shell`).
 
 ## 0.3.0 — local beta, 2026-09-27
 

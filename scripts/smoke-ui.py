@@ -26,8 +26,8 @@ def main():
     if args.output:
         output.mkdir(parents=True, exist_ok=False)
     shell = Path(os.environ.get("OMARCHY_PATH", "/usr/share/omarchy")) / "shell"
-    if not (shell / "Ui/qmldir").exists() or not shutil.which("quickshell"):
-        parser.error("Omarchy shell modules and Quickshell are required")
+    if not (shell / "Ui/qmldir").exists() or not shutil.which("quickshell") or not shutil.which("bsdtar"):
+        parser.error("Omarchy shell modules, Quickshell and bsdtar are required")
 
     omarchy, plugins, state = (output / name for name in ("omarchy", "plugins", "state"))
     original_qml = ('import QtQuick\n\nItem {\n'
@@ -50,7 +50,7 @@ def main():
     (clock / "assets").mkdir()
     (clock / "assets/pixel.bin").write_bytes(b"\0original")
 
-    # An empty package cache and log keep origin searches inside the fixture.
+    # A fixture package cache and empty log keep origin searches inside the fixture.
     (output / "pkg").mkdir()
     (output / "pacman.log").write_text("")
     command = [str(PROJECT / "bin/clone-keeper"), "--omarchy-path", str(omarchy),
@@ -58,18 +58,26 @@ def main():
                "--package-cache", str(output / "pkg"), "--pacman-log", str(output / "pacman.log")]
     subprocess.run(command + ["clone", "omarchy.clock", "--id", "demo.clock", "--json"],
                    check=True, text=True, capture_output=True)
+    # demo.audio was cloned from release 1.0.0, still in the package cache,
+    # and customized; upstream has since changed another line.
+    audio_source = omarchy / "shell/plugins/panels/audio"
+    release = output / "release-1.0.0"
+    shutil.copytree(audio_source, release / "usr/share/omarchy/shell/plugins/panels/audio")
+    (release / "usr/share/omarchy/version").write_text("1.0.0\n")
+    subprocess.run(["bsdtar", "--zstd", "-cf", str(output / "pkg/omarchy-1.0.0-1-x86_64.pkg.tar.zst"),
+                    "-C", str(release), "usr"], check=True)
     audio_clone = plugins / "demo.audio"
-    shutil.copytree(omarchy / "shell/plugins/panels/audio", audio_clone)
+    shutil.copytree(audio_source, audio_clone)
     manifest = json.loads((audio_clone / "manifest.json").read_text())
     manifest.update(id="demo.audio", name="My Audio", omarchy={"clonedFrom": "omarchy.audio"})
     manifest["barWidget"]["displayName"] = "My Audio"
     (audio_clone / "manifest.json").write_text(json.dumps(manifest))
-    # An unedited copy made outside Clone Keeper is tracked when the panel loads;
-    # the customized one needs its original found and confirmed.
-    shutil.copytree(audio_clone, plugins / "demo.audio-copy")
+    (audio_clone / "BarWidget.qml").write_text(original_qml.replace("showDate: true", "showDate: false"))
+    (audio_source / "BarWidget.qml").write_text(original_qml.replace("refreshSeconds: 60", "refreshSeconds: 45"))
+    # An unedited copy made outside Clone Keeper is tracked when the panel loads.
+    shutil.copytree(audio_source, plugins / "demo.audio-copy")
     manifest.update(id="demo.audio-copy", name="Audio Copy")
     (plugins / "demo.audio-copy/manifest.json").write_text(json.dumps(manifest))
-    (audio_clone / "BarWidget.qml").write_text(original_qml.replace("showDate: true", "showDate: false"))
     before = original_qml.replace('"HH:mm"', '"hh:mm AP"')
     (plugins / "demo.clock/BarWidget.qml").write_text(before)
     (plugins / "demo.clock/assets/pixel.bin").write_bytes(b"\0local")
@@ -164,12 +172,24 @@ ShellRoot {
       case 2: keeper.selectClone("demo.audio"); test.step = 100; break
       case 100:
         if (!test.check(keeper.origins && keeper.origins.cloneId === "demo.audio"
-                        && keeper.origins.candidates.length === 1 && keeper.origins.candidates[0].suggested,
-                        "find original release")) return
+                        && keeper.origins.candidates.length === 2 && keeper.origins.candidates[0].suggested
+                        && keeper.origins.candidates[0].versions[0] === "1.0.0-1", "find original release")) return
         test.capture("01-origin"); test.step++; break
-      case 101: keeper.adoptOrigin(keeper.origins.candidates[0]); test.step = 3; break
+      case 101: keeper.adoptOrigin(keeper.origins.candidates[0]); test.step++; break
+      // A clean update goes from one button to a confirmation of the prepared plan.
+      case 102:
+        if (!test.check(keeper.selectedClone.tracked && keeper.selectedClone.status === "diverged"
+                        && keeper.selectedClone.conflicts === 0 && !keeper.errorText, "adopt original release")) return
+        keeper.update(); test.step++; break
+      case 103:
+        if (!test.check(keeper.confirmation && keeper.confirmation.button === "Update" && !keeper.confirmation.restart,
+                        "one-click update confirmation")) return
+        test.capture("01-update-confirmation"); test.step++; break
+      case 104: keeper.confirmAction(); test.step++; break
+      case 105:
+        if (!test.check(keeper.selectedClone.status === "local-only" && !keeper.errorText, "one-click update applied")) return
+        test.step = 3; break
       case 3:
-        if (!test.check(keeper.selectedClone.tracked && !keeper.errorText, "adopt original release")) return
         keeper.loadSources(); test.step++; break
       case 4:
         if (!test.check(keeper.sources.length === 2, "built-in sources")) return
@@ -312,7 +332,10 @@ ShellRoot {
         raise AssertionError("Undo did not restore the original binary customization")
     commands = [json.loads(line) for line in (output / "commands.jsonl").read_text().splitlines()]
     applies = [item for item in commands if item[0] == "apply"]
-    assert len(applies) == 1 and "--expect" in applies[0] and "--expect-plan" in applies[0]
+    # The one-click update and the reviewed apply each bind both fingerprints.
+    assert len(applies) == 2 and all("--expect" in item and "--expect-plan" in item for item in applies), applies
+    assert "showDate: false" in (plugins / "demo.audio/BarWidget.qml").read_text()
+    assert "refreshSeconds: 45" in (plugins / "demo.audio/BarWidget.qml").read_text()
     for item in commands:
         if item[0] in ("clone", "enable", "apply", "undo", "recover"):
             assert "--detach" in item, f"Panel must detach changes that reload it: {item}"

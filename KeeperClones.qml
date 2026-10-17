@@ -288,7 +288,18 @@ Column {
         width: parent.width
         spacing: Style.space(8)
         Ui.Button {
-          text: root.keeper.selectedClone && root.keeper.selectedClone.latestPlan ? "Prepare new review" : "Review changes"
+          readonly property var clone: root.keeper.selectedClone
+          visible: !!clone && (clone.status === "upstream-only" || clone.status === "diverged") && clone.conflicts === 0
+          text: "Update"
+          focusable: true
+          bordered: true
+          enabled: !root.keeper.locked
+          onClicked: root.keeper.update()
+        }
+        Ui.Button {
+          text: root.keeper.selectedClone && root.keeper.selectedClone.latestPlan ? "Prepare new review"
+            : root.keeper.selectedClone && root.keeper.selectedClone.conflicts > 0
+              ? "Resolve " + root.keeper.selectedClone.conflicts + " overlapping file(s)" : "Review changes"
           focusable: true
           bordered: true
           enabled: !root.keeper.locked && !!root.keeper.selectedClone

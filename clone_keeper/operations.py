@@ -162,6 +162,7 @@ class Operations:
         return {"requestId": record["requestId"], "cloneId": clone_id, "operation": operation,
                 "status": status, "message": message, "warning": result.get("warning"),
                 "reloadRequired": bool(result.get("reloadRequired")),
+                "restarted": bool(result.get("restarted")), "undone": bool(result.get("undone")),
                 "startedAt": record["startedAt"], "finishedAt": record.get("finishedAt")}
 
     def dismiss(self, request_ids: list[str]) -> dict:

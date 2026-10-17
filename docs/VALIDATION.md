@@ -65,7 +65,8 @@ the Python wheel does not add the bar widget.
   controller against the real CLI with disposable roots and captures the actual
   KeeperView, rather than replacing its contents with a mock interface.
 - The UI smoke exercises startup sync tracking an unedited clone made outside Clone
-  Keeper, creation, finding and adopting an untracked clone's original, all six conflict resolution
+  Keeper, finding an untracked clone's original in a fixture package, adopting it,
+  a one-click clean update with its confirmation, creation, all six conflict resolution
   routes, reviewed apply with both fingerprints, transaction history and undo. It
   asserts every live-changing panel command is detached and that shown outcomes are
   dismissed, and checks recorded outcomes and the paused state of a running one.

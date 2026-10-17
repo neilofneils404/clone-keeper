@@ -100,7 +100,9 @@ directories listed below. There is no automatic history pruning in this beta.
 
 ## A complete maintenance cycle
 
-The panel exposes this workflow through **New clone**, **Prepare review**, the
+When an update merges cleanly, **Update** prepares it and asks you to confirm the
+exact result; cancel to inspect the review first. Otherwise the panel exposes this
+workflow through **New clone**, **Prepare review**, the
 file navigator and conflict choices, **Apply**, and **History / Undo**. New clones
 start disabled; enable is a separate action. In the panel, apply, undo, recovery
 and enable show a confirmation describing their effect. CLI mutation commands
@@ -164,8 +166,14 @@ users can pass `--detach` too; `status` then lists the outcome until
 separately from a successfully saved transaction.
 
 Omarchy's live reload does not reliably rebuild changed QML, and it can leave the
-bar misaligned until the shell restarts. After apply, undo or recovery of an enabled
-clone, the panel therefore offers **Restart Omarchy shell**, which runs
+bar misaligned until the shell restarts. Applying to an enabled clone from the panel
+therefore restarts the shell, then reads the new shell's log: if your clone failed
+to load, the update is undone and the shell restarted again, and the panel reports
+the error when it reopens. Other messages that mention the clone are reported but
+do not undo the update, since they may predate it. A loaded plugin can still
+misbehave at runtime; Undo remains available. CLI users opt in with
+`apply ... --restart-shell`. After undo or recovery of an enabled clone, the panel
+offers **Restart Omarchy shell**, which runs
 `omarchy-restart-shell` after a confirmation. From a terminal, use
 `./bin/clone-keeper restart-shell` or `omarchy restart shell`. Clone Keeper only
 restarts the shell of the desktop session using the same Omarchy installation.

@@ -96,6 +96,8 @@ QtObject {
     }
     return lines.join("\n")
   }
+  // Set by update(): a clean prepared plan goes straight to confirmation.
+  property bool quickUpdate: false
   // Panel binds this to the widget's notifyUpdates setting.
   property bool notify: false
   readonly property int attentionCount: {
@@ -231,6 +233,14 @@ QtObject {
     root.run("track", args)
   }
 
+  // One click for the common case. The plan is still prepared and its exact
+  // candidate confirmed; cancelling leaves the review open to inspect.
+  function update() {
+    if (!root.selectedId || root.locked) return
+    root.quickUpdate = true
+    root.prepare()
+  }
+
   function prepare() {
     if (!root.selectedId || root.locked) return
     root.selectedFile = ""
@@ -269,15 +279,23 @@ QtObject {
     root.run("history", ["history", root.selectedId, "--json"])
   }
 
-  function askApply() {
+  function askApply(quick) {
     if (!root.canApply) return
+    var files = Number(root.plan.summary ? root.plan.summary.files : root.plan.changes.length)
+    var restart = root.changesRunningClone("apply", root.selectedId)
+    var safety = restart
+      ? " The shell restarts to load it, and the update is undone automatically if your clone fails to load."
+      : ""
     root.confirmation = {
       action: "apply", cloneId: root.selectedId, planId: root.plan.planId,
-      candidateHash: root.plan.candidateHash, planHash: root.plan.planHash || "",
-      title: "Apply reviewed changes?", button: "Apply",
-      message: "Apply this reviewed result to " + root.selectedId + "?\n\n"
-        + Number(root.plan.summary ? root.plan.summary.files : root.plan.changes.length)
-        + " file(s) reviewed. A backup is saved for Undo." + root.restartHint(root.selectedId)
+      candidateHash: root.plan.candidateHash, planHash: root.plan.planHash || "", restart: restart,
+      title: quick ? "Update " + root.selectedId + "?" : "Apply reviewed changes?",
+      button: quick ? "Update" : "Apply",
+      message: (quick
+        ? "Bring Omarchy " + String(root.plan.upstreamVersion || "") + " changes into " + root.selectedId + "?\n\n"
+          + files + " file(s) change and merge cleanly with your customizations. Cancel to review them first."
+        : "Apply this reviewed result to " + root.selectedId + "?\n\n" + files + " file(s) reviewed.")
+        + " A backup is saved for Undo." + safety
     }
   }
 
@@ -338,6 +356,7 @@ QtObject {
       // that must not interrupt the transaction. Status reports the outcome.
       var args = ["apply", action.planId, "--expect", action.candidateHash]
       if (action.planHash) args.push("--expect-plan", action.planHash)
+      if (action.restart) args.push("--restart-shell")
       args.push("--detach", "--json")
       root.run("apply", args)
     } else if (action.action === "restart") {
@@ -412,9 +431,11 @@ QtObject {
       if (root.shownRequests.indexOf(item.requestId) !== -1) { seen.push(item.requestId); continue }
       if (!root.panelOpen) continue
       seen.push(item.requestId)
-      if (item.status === "succeeded") {
+      if (item.status === "succeeded" && item.undone) {
+        failures.push(item.cloneId + ": " + String(item.message))
+      } else if (item.status === "succeeded") {
         notices.push(root.successNotice(item.operation, item.cloneId, item))
-        if (root.changesRunningClone(item.operation, item.cloneId)) root.restartSuggested = true
+        if (!item.restarted && root.changesRunningClone(item.operation, item.cloneId)) root.restartSuggested = true
       }
       else failures.push(item.cloneId + ": " + String(item.message || "The operation failed."))
     }
@@ -441,6 +462,7 @@ QtObject {
     if (result && result.requestId) root.shownRequests = root.shownRequests.concat([String(result.requestId)])
     if (root.processExitCode !== 0 || !result || result.error) {
       if (result && result.requestId) root.dismiss([String(result.requestId)])
+      root.quickUpdate = false
       // Remember a failed search so status refreshes do not repeat it.
       if (root.operation === "origins") root.origins = { cloneId: root.selectedId, candidates: [], errors: [] }
       root.errorText = String(result && (result.message || result.error)
@@ -466,6 +488,11 @@ QtObject {
       root.sources = result.sources
     } else if (["prepare", "review", "resolve"].indexOf(root.operation) !== -1 && Array.isArray(result.changes)) {
       root.adoptPlan(result)
+      if (root.operation === "prepare" && root.quickUpdate) {
+        root.quickUpdate = false
+        if (root.canApply) root.askApply(true)
+        else root.notice = "This update needs your review before it can be applied."
+      }
     } else if (root.operation === "history") {
       root.transactions = Array.isArray(result.transactions) ? result.transactions : []
     } else if (["clone", "track", "apply", "undo", "recover", "enable"].indexOf(root.operation) !== -1) {
@@ -474,8 +501,9 @@ QtObject {
         root.lastCreatedId = root.selectedId
       }
       if (root.operation === "enable") root.lastCreatedId = ""
-      root.notice = root.successNotice(root.operation, root.selectedId, result)
-      root.restartSuggested = root.changesRunningClone(root.operation, root.selectedId)
+      if (result.undone) root.errorText = String(result.message)
+      else root.notice = root.successNotice(root.operation, root.selectedId, result)
+      root.restartSuggested = !result.restarted && root.changesRunningClone(root.operation, root.selectedId)
       root.plan = null
       root.origins = null
       root.selectedFile = ""
