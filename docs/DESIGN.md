@@ -135,6 +135,17 @@ Reviews compare current clone, baseline and upstream hashes with their snapshots
 and mark changed inputs stale. Apply requires the candidate hash the user reviewed;
 the panel additionally supplies a plan metadata hash.
 
+## Pruning
+
+prune is a dry run unless --yes is given. Transactions beyond the newest N per
+clone (default 3) are removed with their staging trees; undo steps back through
+applied transactions, so fewer remain undoable. A clone with an unfinished journal
+keeps all of them, and each removal rechecks its journal under the clone lock.
+Plans for clones no longer installed are removed. Release records are kept when
+they list any of the newest N versions in releases/index.json (default 3), or when
+any untracked clone is cloned from their source. Removals rename to a hidden name
+before deleting.
+
 ## Loading check after apply
 
 apply --restart-shell, which the panel passes for an enabled live clone, runs in
@@ -201,8 +212,8 @@ when both live trees and all backups are recognized. Unknown edits or damaged
 backups are left for inspection. Undo validates the latest applied transaction's
 after-state before writing its own intent, then restores both before snapshots.
 
-Completed journals and staging directories are retained. There is no automatic
-pruning, selective undo, force overwrite, or redo command in this version.
+Completed journals and staging directories are retained until a reviewed prune.
+There is no selective undo, force overwrite, or redo command in this version.
 
 ## Shell integration
 

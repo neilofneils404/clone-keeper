@@ -96,7 +96,11 @@ omarchy plugin remove neil.clone-keeper
 Removal leaves your maintained clones and Clone Keeper state intact. Keep the
 state directory for future updates and undo. To discard it permanently, first
 finish any pending recovery, back it up, then remove the state and staging
-directories listed below. There is no automatic history pruning in this beta.
+directories listed below. Nothing is pruned automatically. `prune` lists history
+that undo, recovery and ancestry no longer need (transactions beyond the newest 3
+per clone, reviews of removed clones, and recorded releases outside the newest 3
+that no untracked clone needs); `prune --yes` removes it. The panel offers this as
+**Clean up old history…** on a clone's history page.
 
 ## A complete maintenance cycle
 

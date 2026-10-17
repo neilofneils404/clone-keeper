@@ -15,13 +15,24 @@ Column {
     muted: true
     text: "Applied changes keep a recovery journal and the previous version. Undo restores the latest applicable saved state when the clone has no newer edits."
   }
-  Ui.Button {
-    text: "Undo last update"
-    visible: !!root.keeper.selectedClone && root.keeper.selectedClone.canUndo === true
-    focusable: true
-    bordered: true
-    enabled: !root.keeper.locked
-    onClicked: root.keeper.askUndo()
+  Flow {
+    width: parent.width
+    spacing: Style.space(8)
+    Ui.Button {
+      text: "Undo last update"
+      visible: !!root.keeper.selectedClone && root.keeper.selectedClone.canUndo === true
+      focusable: true
+      bordered: true
+      enabled: !root.keeper.locked
+      onClicked: root.keeper.askUndo()
+    }
+    Ui.Button {
+      text: "Clean up old history…"
+      focusable: true
+      bordered: true
+      enabled: !root.keeper.locked
+      onClicked: root.keeper.reviewPrune()
+    }
   }
   KeeperText {
     width: parent.width

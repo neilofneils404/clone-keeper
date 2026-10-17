@@ -118,7 +118,8 @@ QtObject {
       "undo": "Restoring the previous version…", "recover": "Recovering the interrupted change…",
       "history": "Loading history…", "enable": "Enabling your clone…",
       "dismiss": "Checking clones…", "restart": "Restarting the Omarchy shell…",
-      "sync": "Checking clones…", "edit": "Opening your editor…"
+      "sync": "Checking clones…", "edit": "Opening your editor…",
+      "prune-list": "Looking for old history…", "prune": "Removing old history…"
     }
     return busy ? String(labels[operation] || "Working…") : ""
   }
@@ -264,6 +265,12 @@ QtObject {
                          "--conflict", String(index), "--take", take, "--json"])
   }
 
+  // Pruning lists what it would remove first; removal is a confirmed second run.
+  function reviewPrune() {
+    if (root.locked) return
+    root.run("prune-list", ["prune", "--json"], false, false)
+  }
+
   function openEditor() {
     if (!root.plan || !root.selectedFile || root.locked) return
     root.run("edit", ["edit", root.plan.planId, "--path", root.selectedFile, "--json"], false, false)
@@ -370,6 +377,8 @@ QtObject {
       if (action.restart) args.push("--restart-shell")
       args.push("--detach", "--json")
       root.run("apply", args)
+    } else if (action.action === "prune") {
+      root.run("prune", ["prune", "--yes", "--json"])
     } else if (action.action === "restart") {
       // The CLI starts the restart in its own session; it refuses fixture roots.
       root.run("restart", ["restart-shell", "--json"])
@@ -524,6 +533,21 @@ QtObject {
       // old Undo button can remain available between the two processes.
       root.busy = true
       Qt.callLater(function() { root.busy = false; root.refreshStatus() })
+    } else if (root.operation === "prune-list") {
+      var items = Array.isArray(result.items) ? result.items : []
+      var kinds = { transaction: 0, plan: 0, release: 0 }
+      for (var k = 0; k < items.length; k++) kinds[items[k].kind]++
+      if (items.length === 0) root.notice = "Nothing to clean up. Recent undo history and recorded releases are kept."
+      else root.confirmation = {
+        action: "prune", title: "Clean up old history?", button: "Remove",
+        message: "Remove " + Math.max(1, Math.round(result.bytes / 1048576)) + " MB of history Clone Keeper no longer needs?\n\n"
+          + kinds.transaction + " older update backup(s), beyond the newest 3 per clone that Undo can step back through; "
+          + kinds.release + " recorded release(s) not among the newest 3 and not needed by an untracked clone; "
+          + kinds.plan + " review(s) for removed clones."
+      }
+    } else if (root.operation === "prune") {
+      root.notice = "Removed " + (result.removed || []).length + " item(s) of old history."
+      if (root.page === "history") Qt.callLater(root.history)
     } else if (root.operation === "edit") {
       root.notice = "Opened " + String(result.path) + ". Save it, then choose Use edited candidate."
     } else if (root.operation === "restart") {

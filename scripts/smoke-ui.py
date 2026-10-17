@@ -252,7 +252,11 @@ ShellRoot {
         keeper.history(); test.step++; break
       case 18:
         if (!test.check(keeper.transactions.length === 1, "transaction history")) return
-        test.capture("09-history"); test.step++; break
+        test.capture("09-history"); test.step = 300; break
+      case 300: keeper.reviewPrune(); test.step++; break
+      case 301:
+        if (!test.check(!keeper.confirmation && keeper.notice.indexOf("Nothing to clean up") !== -1, "prune review")) return
+        test.step = 19; break
       case 19: keeper.askUndo(); test.capture("10-undo-confirmation"); test.step++; break
       case 20: keeper.confirmAction(); test.step++; break
       case 21:

@@ -24,6 +24,8 @@
 - Resolve overlapping lines one conflict at a time with Keep yours, Take upstream,
   Keep both or Use original (`resolve --conflict N`); the rest of the file stays
   merged. **Open in editor** hands a candidate file to your Omarchy editor (`edit`).
+- `prune` lists, and with `--yes` removes, old transactions, reviews of removed
+  clones and old recorded releases; **Clean up old history…** in the panel.
 
 ## 0.3.0 — local beta, 2026-09-27
 

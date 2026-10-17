@@ -40,7 +40,8 @@ def parser():
         "recover": "Finish an interrupted operation from its journal",
         "dismiss": "Forget recorded outcomes of detached operations",
         "restart-shell": "Restart the Omarchy shell so updated clones load (installed plugins only)",
-        "edit": "Open a saved plan's candidate file in your Omarchy editor (installed plugins only)"}
+        "edit": "Open a saved plan's candidate file in your Omarchy editor (installed plugins only)",
+        "prune": "List, then with --yes remove, history that undo, recovery and ancestry no longer need"}
     for name, description in descriptions.items():
         command = commands.add_parser(name, help=description)
         command.add_argument("--json", action="store_true")
@@ -69,6 +70,12 @@ def parser():
             command.add_argument("request_ids", nargs="+", metavar="REQUEST_ID")
         elif name == "export":
             command.add_argument("--output", required=True, type=user_path)
+        elif name == "prune":
+            command.add_argument("--keep-transactions", type=int, default=3, metavar="N",
+                                 help="Undoable transactions to keep per clone (default 3)")
+            command.add_argument("--keep-releases", type=int, default=3, metavar="N",
+                                 help="Newest recorded Omarchy releases to keep (default 3)")
+            command.add_argument("--yes", action="store_true", help="Remove the listed items")
         elif name == "edit":
             command.add_argument("--path", required=True)
         elif name == "resolve":
@@ -149,6 +156,15 @@ def human(result, command):
             print(f"    track {result['cloneId']} --origin {item['versions'][-1]} --expect {item['baselineHash']}")
         for error in result["errors"]:
             print(f"Note: {error['message']}", file=sys.stderr)
+    elif command == "prune":
+        verb = "Would remove" if result["dryRun"] else "Removed"
+        for item in result["items"]:
+            label = item.get("cloneId") or item.get("sourceId")
+            print(f"{verb} {item['kind']} {item['id'][:12]} ({label}, {item['bytes'] // 1024} KiB): {item['reason']}")
+        print(f"{'Nothing to remove.' if not result['items'] else f'{result['bytes'] // 1024} KiB in total.'}"
+              + (" Run again with --yes to remove." if result["dryRun"] and result["items"] else ""))
+        for error in result["errors"]:
+            print(f"Skipped {error['path']}: {error['message']}", file=sys.stderr)
     elif command == "sync":
         if result["skipped"]:
             print("Another sync is running.")
@@ -228,6 +244,9 @@ def execute(args, keeper, work):
         return work.refresh(work.transactions.undo(args.clone_id))
     if command == "dismiss":
         return work.operations.dismiss(args.request_ids)
+    if command == "prune":
+        from .prune import Pruner
+        return Pruner(work).run(args.keep_transactions, args.keep_releases, args.yes)
     if command == "edit":
         return work.open_editor(args.plan_id, args.path)
     if command == "restart-shell":

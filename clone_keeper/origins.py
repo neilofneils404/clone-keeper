@@ -169,9 +169,39 @@ class ReleaseStore:
                         added.append(source_id)
                 except (KeeperError, OSError, ValueError) as exc:
                     errors.append({"path": str(source.path), "message": str(exc)})
+            try:
+                order = self.versions()
+                if version not in order:
+                    from .plans import atomic_json
+                    atomic_json(self.root / "index.json", {"schemaVersion": 1, "versions": order + [version]})
+            except (KeeperError, OSError, ValueError) as exc:
+                errors.append({"path": str(self.root / "index.json"), "message": str(exc)})
         finally:
             os.close(lock)
         return {"version": version, "recorded": added, "errors": errors, "skipped": False}
+
+    def versions(self) -> list[str]:
+        """Release versions in the order they were first seen running."""
+        path = self.root / "index.json"
+        no_symlink_path(path)
+        if not path.exists():
+            return []
+        index = object_json(read_file(path).data, str(path))
+        if index.get("schemaVersion") != 1 or not isinstance(index.get("versions"), list):
+            raise KeeperError(f"Invalid release index: {path}")
+        return [str(item) for item in index["versions"]]
+
+    def records(self):
+        """Every stored release record as (path, source id, metadata)."""
+        no_symlink_path(self.root)
+        if not self.root.is_dir():
+            return
+        for source in sorted(self.root.iterdir()):
+            if source.name.startswith(".") or not source.is_dir():
+                continue
+            for path in sorted(source.iterdir()):
+                if not path.name.startswith("."):
+                    yield path, source.name, self._meta(path, source.name, path.name)
 
     def _record_one(self, source_id, tree, version):
         digest = tree_hash(tree)

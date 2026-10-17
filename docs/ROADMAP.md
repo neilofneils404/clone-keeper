@@ -27,7 +27,6 @@ submit the marketplace listing.
 ## Later, driven by use
 
 - Help locate original source from historical Omarchy releases.
-- Reviewable retention/pruning for old plans, backups and staging directories.
 - Explicit provenance for selected third-party forks.
 - Contribute original source revision metadata to Omarchy's clone command.
 - Optional update notifications with clear freshness and no automatic application.
