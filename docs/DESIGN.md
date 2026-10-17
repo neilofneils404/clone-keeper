@@ -47,6 +47,19 @@ aggregate hash. Every baseline read verifies its inventory.
 - created-from-source: clone creation records the ancestor before publication.
 - verified-current-source: an unchanged existing clone matches current source.
 - user-supplied-original: the owner supplies its known historical ancestor.
+- historical-release-source: the owner confirms one of the Omarchy releases found
+  on this machine (installed tree, pacman package cache, or a supplied tree or
+  package). The record keeps the evidence shown: release versions and archive
+  hashes, the clone's creation time, the release installed then according to
+  pacman's log, and which files still matched.
+
+Finding origins is read-only. Candidates are ranked by whether their release was
+installed when the clone directory was created, then by fewest differing lines.
+Those are suggestions; adoption requires the version and the baselineHash shown,
+and re-derives the tree so the stored baseline is exactly what was reviewed.
+Packages are extracted with bsdtar, which refuses absolute and parent-relative
+members, into private scratch directories. Releases are materialized with the
+current clone rules, which match Omarchy 4.x.
 - applied-plan: a reviewed apply advances the ancestor to that plan's upstream.
 
 Version labels and modification times never establish ancestry. Repeated tracking

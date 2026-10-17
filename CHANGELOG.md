@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Find an existing clone's original among Omarchy releases on this machine:
+  the installed tree, pacman's package cache, or supplied trees and packages.
+  `origins` ranks them using pacman's log and the files that still match;
+  `track --origin VERSION --expect HASH` records the confirmed one with its evidence.
+- The panel searches automatically for an untracked clone and offers the best match.
+
 ## 0.3.0 — local beta, 2026-09-27
 
 - Publish complete transaction staging trees atomically so interrupted copies can

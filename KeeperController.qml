@@ -12,6 +12,8 @@ QtObject {
   property var sources: []
   property var transactions: []
   property var plan: null
+  // Original-release candidates for the selected untracked clone.
+  property var origins: null
   property string upstreamVersion: ""
   property string selectedId: ""
   property string selectedFile: ""
@@ -95,6 +97,7 @@ QtObject {
     var labels = {
       "status": "Checking clones…", "sources": "Loading built-in plugins…",
       "clone": "Creating your tracked clone…", "track": "Verifying baseline…",
+      "origins": "Looking for the release this clone came from…",
       "prepare": "Preparing a review…", "review": "Checking candidate files…",
       "resolve": "Updating your resolution…", "apply": "Applying reviewed changes…",
       "undo": "Restoring the previous version…", "recover": "Recovering the interrupted change…",
@@ -139,6 +142,7 @@ QtObject {
     if (root.busy) return
     if (id !== root.selectedId) {
       root.plan = null
+      root.origins = null
       root.selectedFile = ""
       root.transactions = []
     }
@@ -146,6 +150,23 @@ QtObject {
     root.page = "clones"
     root.errorText = ""
     root.notice = ""
+    root.findOrigins()
+  }
+
+  // Searching only reads releases on this machine, so it starts by itself
+  // for an untracked clone; adopting a candidate is a separate choice.
+  function findOrigins() {
+    var clone = root.selectedClone
+    if (root.busy || !clone || clone.tracked || clone.pendingTransaction
+        || (root.origins && root.origins.cloneId === clone.id)) return
+    root.run("origins", ["origins", clone.id, "--json"], true, true)
+  }
+
+  function adoptOrigin(candidate) {
+    if (!root.selectedId || root.locked || !candidate) return
+    var versions = candidate.versions || []
+    root.run("track", ["track", root.selectedId, "--origin", String(versions[versions.length - 1]),
+                       "--expect", String(candidate.baselineHash), "--json"])
   }
 
   function showClones() {
@@ -392,6 +413,8 @@ QtObject {
     if (result && result.requestId) root.shownRequests = root.shownRequests.concat([String(result.requestId)])
     if (root.processExitCode !== 0 || !result || result.error) {
       if (result && result.requestId) root.dismiss([String(result.requestId)])
+      // Remember a failed search so status refreshes do not repeat it.
+      if (root.operation === "origins") root.origins = { cloneId: root.selectedId, candidates: [], errors: [] }
       root.errorText = String(result && (result.message || result.error)
         || root.diagnostic.trim() || "Clone Keeper could not read the helper response.")
       return
@@ -408,6 +431,9 @@ QtObject {
         }).join("\n")
       root.operations = Array.isArray(result.operations) ? result.operations : []
       root.reportOperations()
+      Qt.callLater(root.findOrigins)
+    } else if (root.operation === "origins" && Array.isArray(result.candidates)) {
+      root.origins = result
     } else if (root.operation === "sources" && Array.isArray(result.sources)) {
       root.sources = result.sources
     } else if (["prepare", "review", "resolve"].indexOf(root.operation) !== -1 && Array.isArray(result.changes)) {
@@ -423,6 +449,7 @@ QtObject {
       root.notice = root.successNotice(root.operation, root.selectedId, result)
       root.restartSuggested = root.changesRunningClone(root.operation, root.selectedId)
       root.plan = null
+      root.origins = null
       root.selectedFile = ""
       root.page = "clones"
       // Keep controls disabled until the post-write status is loaded. Without

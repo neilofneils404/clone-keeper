@@ -8,6 +8,7 @@ import sys
 from . import __version__
 from .core import Keeper, KeeperError, object_json, plugin_id, read_file
 from .operations import DETACHABLE, HANDLED
+from .origins import Origins
 from .plans import plan_identifier
 from .service import Workflow
 
@@ -23,11 +24,14 @@ def parser():
     root.add_argument("--omarchy-path", type=Path, default=Path(os.environ.get("OMARCHY_PATH", "/usr/share/omarchy")))
     root.add_argument("--plugins-dir", type=Path, default=Path.home() / ".config/omarchy/plugins")
     root.add_argument("--state-dir", type=Path, default=Path(os.environ.get("XDG_STATE_HOME", str(Path.home() / ".local/state"))) / "clone-keeper")
+    root.add_argument("--package-cache", type=Path, default=Path("/var/cache/pacman/pkg"), help=argparse.SUPPRESS)
+    root.add_argument("--pacman-log", type=Path, default=Path("/var/log/pacman.log"), help=argparse.SUPPRESS)
     commands = root.add_subparsers(dest="command", required=True)
     descriptions = {
         "status": "Discover clones and compare their recorded baselines", "sources": "List built-in sources for new clones",
         "clone": "Create a disabled clone and capture its original baseline", "enable": "Enable an installed clone",
-        "track": "Record a verified or explicitly supplied original baseline", "preview": "Inspect a merge without saving a plan",
+        "track": "Record a verified or explicitly supplied original baseline",
+        "origins": "Find a clone's likely original among Omarchy releases on this machine", "preview": "Inspect a merge without saving a plan",
         "export": "Export a clean candidate to a new directory", "prepare": "Save a merge plan for review and resolution",
         "plans": "List saved merge plans", "review": "Review a saved plan and detect stale inputs",
         "resolve": "Choose a conflict resolution or accept an edited candidate", "apply": "Apply the exact reviewed candidate with recovery and undo",
@@ -38,15 +42,21 @@ def parser():
     for name, description in descriptions.items():
         command = commands.add_parser(name, help=description)
         command.add_argument("--json", action="store_true")
-        if name in ("track", "preview", "export", "prepare", "history", "undo", "recover", "enable"):
+        if name in ("track", "origins", "preview", "export", "prepare", "history", "undo", "recover", "enable"):
             command.add_argument("clone_id")
         if name in ("review", "resolve", "apply"):
             command.add_argument("plan_id")
         if name in DETACHABLE:
             command.add_argument("--detach", action="store_true",
                                  help="Finish even if this caller is killed; status reports the outcome until dismissed")
+        if name in ("track", "origins"):
+            command.add_argument("--search", type=user_path, action="append", default=[], metavar="PATH",
+                                 help="Also consider an Omarchy tree or package archive")
         if name == "track":
-            command.add_argument("--baseline", type=user_path, help="Known original source directory with manifest.json")
+            origin = command.add_mutually_exclusive_group()
+            origin.add_argument("--baseline", type=user_path, help="Known original source directory with manifest.json")
+            origin.add_argument("--origin", metavar="VERSION", help="Adopt the original from this Omarchy release (see origins)")
+            command.add_argument("--expect", metavar="BASELINE_HASH", help="baselineHash of the origin you reviewed")
         elif name == "clone":
             command.add_argument("source_id")
             command.add_argument("--id", dest="clone_id")
@@ -75,6 +85,8 @@ def human(result, command):
             print("No built-in plugin clones found.")
         for row in result["clones"]:
             print(f"{row['id']}: {row['status']} — {row['message']}")
+            if row["status"] == "untracked":
+                print(f"  Find its original: clone-keeper origins {row['id']}")
             if row["tracked"]:
                 print(f"  {row['localChangedFiles']} local / {row['upstreamChangedFiles']} upstream files changed")
         for item in result.get("operations", []):
@@ -111,6 +123,21 @@ def human(result, command):
             print("No transactions recorded.")
     elif command == "dismiss":
         print(f"Dismissed {len(result['dismissed'])} recorded operation(s).")
+    elif command == "origins":
+        when = result["cloneCreatedAt"] or "an unrecorded time"
+        print(f"{result['cloneId']} was created {when}"
+              + (f", while Omarchy {result['installedAtCreation']} was installed." if result["installedAtCreation"] else "."))
+        if not result["candidates"]:
+            print("No release on this machine contains its source.")
+        for item in result["candidates"]:
+            mark = "→ " if item.get("suggested") else "  "
+            print(f"{mark}Omarchy {', '.join(item['versions'])}: {item['unchangedFiles']}/{item['files']} files unchanged, "
+                  f"{item['changedLines']} lines differ{' (installed at creation)' if item['timelineMatch'] else ''}")
+            if item["changedFiles"]:
+                print(f"    differs in: {', '.join(item['changedFiles'][:8])}")
+            print(f"    track {result['cloneId']} --origin {item['versions'][-1]} --expect {item['baselineHash']}")
+        for error in result["errors"]:
+            print(f"Note: {error['message']}", file=sys.stderr)
     elif command == "track":
         print(f"Tracking {result['cloneId']} from {result['provenance']}.")
         print(f"Baseline: {result['baselineHash']} ({result['statePath']})")
@@ -141,7 +168,15 @@ def execute(args, keeper, work):
         return result
     if command == "enable":
         return work.enable(args.clone_id)
+    if command == "origins":
+        return Origins(keeper, args.package_cache, args.pacman_log).find(args.clone_id, args.search)
     if command == "track":
+        if args.origin:
+            if not args.expect:
+                raise KeeperError("--origin requires --expect with the baselineHash shown by origins")
+            tree, evidence = Origins(keeper, args.package_cache, args.pacman_log).baseline(
+                args.clone_id, args.origin, args.expect, args.search)
+            return work.track(args.clone_id, origin=(tree, f"Omarchy {args.origin}", evidence))
         return work.track(args.clone_id, args.baseline)
     if command == "preview":
         return keeper.preview(args.clone_id)[0]

@@ -32,6 +32,7 @@ update. Clone identity and Omarchy's source relationship remain intact.
 ## Features
 
 - Create a disabled clone with its baseline recorded before it can be edited.
+- Find an existing clone's original among Omarchy releases on this machine, with evidence.
 - Adopt unchanged clones, or provide a known original for existing customizations.
 - Inspect local edits, upstream edits and the proposed result, file by file.
 - Merge independent text changes; resolve overlapping, binary and deletion conflicts.
@@ -173,8 +174,27 @@ For a clone still identical to its current source, apart from generated identity
 ./bin/clone-keeper track "$USER.clock"
 ```
 
-For an already customized clone, supply the **actual original** from when it was
-cloned, as a standalone source directory with its original `manifest.json` and ID:
+For an already customized clone, look for its original among the Omarchy
+releases on this machine: the installed tree and packages in pacman's cache.
+
+```bash
+./bin/clone-keeper origins "$USER.clock"
+```
+
+Each candidate shows which files still match it exactly and whether that release
+was installed when the clone's folder was created, according to pacman's log.
+Neither proves ancestry, so nothing is recorded until you choose one; the panel
+searches by itself and shows the best match with **Use this original**:
+
+```bash
+./bin/clone-keeper track "$USER.clock" --origin 4.0.4-1 --expect BASELINE_HASH
+```
+
+`--search PATH` adds another Omarchy tree, such as a release checkout, or a
+package archive. pacman keeps only recent packages by default, so adopt an
+original before the release it came from is cleaned out of the cache.
+
+Otherwise, supply the **actual original** from when it was cloned, as a standalone source directory with its original `manifest.json` and ID:
 
 ```bash
 ./bin/clone-keeper track "$USER.clock" --baseline /path/to/original-clock

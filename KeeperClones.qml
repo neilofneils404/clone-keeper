@@ -137,9 +137,80 @@ Column {
       KeeperText {
         width: parent.width
         muted: true
-        text: "Start by saving this clone’s original upstream files. Current upstream is accepted only when the clone is still unchanged."
+        text: "Start by saving this clone’s original upstream files, so later Omarchy updates can be merged with your changes."
       }
+
+      // The best release found on this machine, with the evidence for it.
+      readonly property var origins: root.keeper.origins && root.keeper.origins.cloneId === root.keeper.selectedId
+        ? root.keeper.origins : null
+      readonly property var suggested: {
+        var list = origins ? origins.candidates : []
+        for (var i = 0; i < list.length; i++) if (list[i].suggested) return list[i]
+        return null
+      }
+      Rectangle {
+        id: originCard
+        width: parent.width
+        visible: !!parent.suggested
+        height: originContent.implicitHeight + Style.space(20)
+        radius: Style.cornerRadius
+        color: Util.alpha(Color.accent, 0.08)
+        border.width: 1
+        border.color: Util.alpha(Color.accent, 0.45)
+        readonly property var candidate: parent.suggested
+        readonly property var origins: parent.origins
+        Column {
+          id: originContent
+          x: Style.space(10)
+          y: Style.space(10)
+          width: parent.width - Style.space(20)
+          spacing: Style.space(6)
+          KeeperText {
+            width: parent.width
+            font.bold: true
+            text: originCard.candidate ? "Original found: Omarchy " + originCard.candidate.versions.join(", ") : ""
+          }
+          KeeperText {
+            width: parent.width
+            small: true
+            muted: true
+            text: {
+              var item = originCard.candidate
+              if (!item) return ""
+              var lines = []
+              if (item.timelineMatch) lines.push("This release was installed when the clone was created.")
+              lines.push(item.unchangedFiles + " of " + item.files + " files still match it exactly.")
+              if (item.changedFiles.length > 0)
+                lines.push("Your changes: " + item.changedFiles.slice(0, 4).join(", ")
+                  + (item.changedFiles.length > 4 ? " and " + (item.changedFiles.length - 4) + " more" : ""))
+              return lines.join("\n")
+            }
+          }
+          Ui.Button {
+            text: "Use this original"
+            focusable: true
+            bordered: true
+            enabled: !root.keeper.locked
+            onClicked: root.keeper.adoptOrigin(originCard.candidate)
+          }
+        }
+      }
+      KeeperText {
+        width: parent.width
+        visible: !!parent.origins && !parent.suggested
+        small: true
+        warning: true
+        text: {
+          var found = parent.origins
+          if (!found) return ""
+          var notes = (found.errors || []).map(function(item) { return String(item.message) })
+          return (notes.length > 0 ? notes.join("\n") : "No release on this machine clearly matches this clone.")
+            + " You can choose its original directory below."
+        }
+      }
+
       Ui.Button {
+        visible: !parent.suggested
         text: "Capture verified baseline"
         focusable: true
         bordered: true

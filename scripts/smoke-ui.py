@@ -50,8 +50,12 @@ def main():
     (clock / "assets").mkdir()
     (clock / "assets/pixel.bin").write_bytes(b"\0original")
 
+    # An empty package cache and log keep origin searches inside the fixture.
+    (output / "pkg").mkdir()
+    (output / "pacman.log").write_text("")
     command = [str(PROJECT / "bin/clone-keeper"), "--omarchy-path", str(omarchy),
-               "--plugins-dir", str(plugins), "--state-dir", str(state)]
+               "--plugins-dir", str(plugins), "--state-dir", str(state),
+               "--package-cache", str(output / "pkg"), "--pacman-log", str(output / "pacman.log")]
     subprocess.run(command + ["clone", "omarchy.clock", "--id", "demo.clock", "--json"],
                    check=True, text=True, capture_output=True)
     audio_clone = plugins / "demo.audio"
@@ -148,9 +152,16 @@ ShellRoot {
       case 1:
         if (!test.check(keeper.hasLoaded && keeper.clones.length === 2, "initial status")) return
         test.capture("01-clones"); test.step++; break
-      case 2: keeper.selectClone("demo.audio"); keeper.track(""); test.step++; break
+      // Selecting an untracked clone searches for its original by itself.
+      case 2: keeper.selectClone("demo.audio"); test.step = 100; break
+      case 100:
+        if (!test.check(keeper.origins && keeper.origins.cloneId === "demo.audio"
+                        && keeper.origins.candidates.length === 1 && keeper.origins.candidates[0].suggested,
+                        "find original release")) return
+        test.capture("01-origin"); test.step++; break
+      case 101: keeper.adoptOrigin(keeper.origins.candidates[0]); test.step = 3; break
       case 3:
-        if (!test.check(keeper.selectedClone.tracked && !keeper.errorText, "capture baseline")) return
+        if (!test.check(keeper.selectedClone.tracked && !keeper.errorText, "adopt original release")) return
         keeper.loadSources(); test.step++; break
       case 4:
         if (!test.check(keeper.sources.length === 2, "built-in sources")) return
@@ -265,7 +276,7 @@ ShellRoot {
       case 35:
         if (!test.check(keeper.errorText.indexOf("installed") !== -1, "isolated restart is refused")) return
         keeper.live = false; keeper.operations = []; test.step++; break
-      case 36: console.log("SMOKE_OK real CLI create track resolve apply history undo; enable and restart refused in fixture; recorded outcomes; focus restored"); Qt.quit(); break
+      case 36: console.log("SMOKE_OK real CLI create origins track resolve apply history undo; enable and restart refused in fixture; recorded outcomes; focus restored"); Qt.quit(); break
       }
     }
   }

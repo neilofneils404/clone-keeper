@@ -110,9 +110,9 @@ class Workflow:
         except (KeeperError, ValueError, TypeError):
             return None
 
-    def track(self, ident, baseline=None):
+    def track(self, ident, baseline=None, origin=None):
         with clone_lock(self.keeper, ident):
-            return self.keeper.track(ident, baseline)
+            return self.keeper.track(ident, baseline, origin)
 
     def clone_id_for(self, source_id, clone_id=None):
         plugin_id(source_id)

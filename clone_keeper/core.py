@@ -510,13 +510,22 @@ class Keeper:
                 raise KeeperError(f"Destination must be outside installed plugins, Omarchy sources, and managed state: {target}")
         return target
 
-    def track(self, ident: str, baseline: Path | None = None) -> dict:
+    def track(self, ident: str, baseline: Path | None = None, origin=None) -> dict:
+        """Record a clone's ancestor.
+
+        origin is a confirmed (original tree, release version, evidence) found
+        among recorded Omarchy releases; see origins.Origins.baseline.
+        """
         path, local, value, source_id = self.clone(ident)
         destination = self.protect_destination(self.state_path(ident), state=True)
         if destination.exists():
             raise KeeperError(f"{ident} is already tracked; its baseline will not be overwritten")
         identity = clone_identity(value)
-        if baseline is None:
+        evidence = None
+        if origin is not None:
+            base, version, evidence = origin
+            provenance = "historical-release-source"
+        elif baseline is None:
             source = self.sources().get(source_id)
             if source is None:
                 raise KeeperError(f"Upstream source is missing: {source_id}")
@@ -542,6 +551,8 @@ class Keeper:
                 "capturedAt": datetime.now(timezone.utc).isoformat(),
                 "baselineVersion": version, "provenance": provenance,
                 "baselineHash": tree_hash(base), "files": inventory(base)}
+        if evidence is not None:
+            meta["evidence"] = evidence
         stored = {f"baseline/{name}": file for name, file in base.items()}
         stored["record.json"] = File(json_bytes(meta), 0o600)
         # Ensure directory privacy even when the user's umask is permissive.
@@ -573,7 +584,7 @@ class Keeper:
                 row = {"id": ident, "name": info.get("name", ident),
                        "sourceId": info["omarchy"]["clonedFrom"], "path": str(directory),
                        "tracked": self.state_path(ident).exists(), "status": "untracked",
-                       "message": "Record a baseline before editing, or supply the original source.",
+                       "message": "Its original source is not recorded yet, so updates cannot be merged.",
                        "localChangedFiles": 0, "upstreamChangedFiles": 0, "baselineVersion": None}
                 result["clones"].append(row)
                 try:
