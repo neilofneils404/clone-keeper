@@ -51,6 +51,7 @@ Item {
     target: root.keeper
     function onPageChanged() { scroller.contentY = 0 }
     function onErrorTextChanged() { if (root.keeper.errorText !== "") scroller.contentY = 0 }
+    function onOutcomeErrorChanged() { if (root.keeper.outcomeError !== "") scroller.contentY = 0 }
     function onNoticeChanged() { if (root.keeper.notice !== "") scroller.contentY = 0 }
   }
 
@@ -136,8 +137,8 @@ Item {
         spacing: Style.space(14)
         KeeperText {
           width: parent.width
-          visible: root.keeper.errorText !== ""
-          text: root.keeper.errorText
+          visible: text !== ""
+          text: [root.keeper.outcomeError, root.keeper.errorText].filter(function(item) { return item !== "" }).join("\n")
           warning: true
         }
         KeeperText {

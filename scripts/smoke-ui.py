@@ -316,16 +316,24 @@ ShellRoot {
         test.capture("15-large-text-focused"); test.step++; break
       case 28:
         // Outcomes recorded while Omarchy had reloaded the panel appear once it is open.
-        keeper.page = "clones"; keeper.panelOpen = true; keeper.notice = ""; keeper.errorText = ""
+        keeper.page = "clones"; keeper.panelOpen = true; keeper.notice = ""; keeper.errorText = ""; keeper.outcomeError = ""
         keeper.operations = [
           { requestId: "a".repeat(32), cloneId: "demo.clock", operation: "apply", status: "succeeded",
             message: "Candidate applied; the baseline now records upstream.", warning: null, reloadRequired: false },
           { requestId: "b".repeat(32), cloneId: "demo.audio", operation: "enable", status: "interrupted",
-            message: "The enable request for demo.audio stopped before recording a result." }]
+            message: "The enable request for demo.audio stopped before recording a result." },
+          { requestId: "d".repeat(32), cloneId: "demo.clock", operation: "apply", status: "succeeded", undone: true,
+            restarted: true, message: "The update kept demo.clock from loading, so it was undone." }]
         keeper.reportOperations()
-        if (!test.check(keeper.notice.indexOf("applied") !== -1 && keeper.errorText.indexOf("demo.audio") !== -1
-            && keeper.pendingDismissals.length + (keeper.operation === "dismiss" ? 2 : 0) >= 2, "recorded outcomes shown")) return
-        test.step++; break
+        if (!test.check(keeper.notice.indexOf("applied") !== -1 && keeper.outcomeError.indexOf("demo.audio") !== -1
+            && keeper.outcomeError.indexOf("kept demo.clock") !== -1
+            && keeper.pendingDismissals.length + (keeper.operation === "dismiss" ? 3 : 0) >= 3, "recorded outcomes shown")) return
+        test.step = 500; break
+      // An undone update stays visible after the next status refresh.
+      case 500: keeper.operations = []; keeper.refreshStatus(); test.step++; break
+      case 501:
+        if (!test.check(keeper.outcomeError.indexOf("kept demo.clock") !== -1, "outcome errors survive refresh")) return
+        test.step = 29; break
       case 29:
         keeper.operations = [{ requestId: "c".repeat(32), cloneId: "demo.clock", operation: "apply",
           status: "running", message: "Finishing apply for demo.clock…" }]

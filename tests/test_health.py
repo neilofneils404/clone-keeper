@@ -17,6 +17,24 @@ LOG = "\n".join([
 ])
 
 
+QS_LIST = """Instance a:
+  Process ID: 11
+  Config path: /usr/share/omarchy/shell/shell.qml
+Instance b:
+  Process ID: 22
+  Config path: /tmp/pilot/omarchy/shell/shell.qml
+"""
+
+
+class InstanceTests(unittest.TestCase):
+    def test_finds_the_instance_for_a_config(self):
+        with mock.patch.object(health.subprocess, "run",
+                               return_value=mock.Mock(stdout=QS_LIST, returncode=0)):
+            self.assertEqual(health.shell_instance("/tmp/pilot/omarchy/shell"), 22)
+            self.assertEqual(health.shell_instance("/usr/share/omarchy/shell/"), 11)
+            self.assertIsNone(health.shell_instance("/elsewhere"))
+
+
 class LogTests(unittest.TestCase):
     def test_separates_load_failures_from_other_messages(self):
         failures, others = health.clone_messages(LOG, "neil.audio", PATH)
@@ -48,9 +66,23 @@ class VerifyTests(unittest.TestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
 
-    def verify(self, log):
-        with mock.patch.object(health, "shell_log", return_value=log):
-            return self.work.verify_update("neil.audio")
+    def verify(self, log, pids=(100, 200, 200, 300)):
+        instances = iter(pids)
+        with mock.patch.object(health, "shell_log", return_value=log) as read, \
+                mock.patch.object(health, "shell_instance", side_effect=lambda config: next(instances)):
+            result = self.work.verify_update("neil.audio")
+        self.read = read
+        return result
+
+    def test_reads_the_restarted_instances_log(self):
+        self.verify("INFO: Configuration Loaded")
+        self.read.assert_called_once_with(200)
+
+    def test_unchanged_shell_instance_is_not_trusted(self):
+        result = self.verify(LOG, pids=(100, 100))
+        self.assertFalse(result["restarted"])
+        self.assertIn("restarted shell", result["warning"])
+        self.work.transactions.undo.assert_not_called()
 
     def test_healthy_update_is_kept(self):
         result = self.verify("INFO: Configuration Loaded")

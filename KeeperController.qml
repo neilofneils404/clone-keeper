@@ -143,7 +143,10 @@ QtObject {
   }
 
   // A shown outcome belongs to that viewing; reopening starts from status.
-  onPanelOpenChanged: if (!panelOpen) { root.notice = ""; root.restartSuggested = false }
+  // Failed or undone background operations are reported once, then their records
+  // are dismissed; keep them for this viewing like notices, past status refreshes.
+  property string outcomeError: ""
+  onPanelOpenChanged: if (!panelOpen) { root.notice = ""; root.outcomeError = ""; root.restartSuggested = false }
 
   function cloneEnabled(cloneId) {
     for (var i = 0; i < root.clones.length; i++)
@@ -473,7 +476,7 @@ QtObject {
     }
     if (running) notices.push(String(running.message) + " Changes are paused until it finishes.")
     if (notices.length > 0) root.notice = notices.join("\n")
-    if (failures.length > 0) root.errorText = (root.errorText ? root.errorText + "\n" : "") + failures.join("\n")
+    if (failures.length > 0) root.outcomeError = (root.outcomeError ? root.outcomeError + "\n" : "") + failures.join("\n")
     root.dismiss(seen)
   }
 
