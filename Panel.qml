@@ -1,4 +1,5 @@
 import QtQuick
+import Quickshell.Io
 import qs.Commons
 import qs.Ui as Ui
 
@@ -12,6 +13,7 @@ Ui.Panel {
   property alias keeper: keeperController
   readonly property int updateCount: keeperController.updateCount
   readonly property int attentionCount: keeperController.attentionCount
+  readonly property string updateSummary: keeperController.updateSummary
 
   function open() {
     root.controller.show()
@@ -26,7 +28,18 @@ Ui.Panel {
   }
   onOpenedChanged: keeperController.panelOpen = root.opened
 
-  KeeperController { id: keeperController }
+  KeeperController {
+    id: keeperController
+    notify: root.setting("notifyUpdates", true) !== false
+  }
+
+  // Update notifications open the panel with `omarchy-shell neil.clone-keeper open`.
+  IpcHandler {
+    target: "neil.clone-keeper"
+    function open(): void { root.open() }
+    function close(): void { root.close() }
+    function toggle(): void { root.opened ? root.close() : root.open() }
+  }
   Component.onCompleted: Qt.callLater(keeperController.startup)
 
   Ui.KeyboardPanel {

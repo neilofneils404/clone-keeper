@@ -59,7 +59,7 @@ the Python wheel does not add the bar widget.
 ## Native interface
 
 - `scripts/check-ui.sh` exits zero with Qt 6.11.2 and the installed Omarchy validator.
-  It checks every root QML component and retains 22 dynamic QObject/Quickshell type
+  It checks every root QML component and retains 23 dynamic QObject/Quickshell type
   warnings; there are no lint errors.
 - `python scripts/smoke-ui.py --native-load` exits zero. It runs the actual QML
   controller against the real CLI with disposable roots and captures the actual
@@ -72,6 +72,9 @@ the Python wheel does not add the bar widget.
   An applied change to an enabled clone offers a shell restart, focus returns to
   the control that opened a confirmation, and the CLI refuses the fixture restart.
   Final filesystem checks verify text and binary customizations were restored.
+- With several panel instances loaded (the harness, or one bar per monitor), Quickshell
+  warns that later `neil.clone-keeper` IPC handlers are unused; the first one serves
+  `omarchy-shell neil.clone-keeper open`, as with Omarchy's own panel targets.
 - It also loads the real hidden BarWidget and Panel against installed Omarchy
   modules in a separate Quickshell instance, including the widget's update count.
 - Captures cover clone list, creation, activation confirmation, conflict review,

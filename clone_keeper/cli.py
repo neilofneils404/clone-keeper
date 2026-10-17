@@ -76,6 +76,9 @@ def parser():
         elif name == "apply":
             command.add_argument("--expect", required=True, help="Exact candidateHash from the reviewed plan")
             command.add_argument("--expect-plan", help="Optional planHash from the reviewed plan")
+        elif name == "sync":
+            command.add_argument("--notify", action="store_true",
+                                 help="Send a desktop notification once for each new upstream change")
     return root
 
 
@@ -180,7 +183,7 @@ def execute(args, keeper, work):
     if command == "enable":
         return work.enable(args.clone_id)
     if command == "sync":
-        return work.sync(Origins(keeper, args.package_cache, args.pacman_log))
+        return work.sync(Origins(keeper, args.package_cache, args.pacman_log), args.notify)
     if command == "origins":
         return Origins(keeper, args.package_cache, args.pacman_log).find(args.clone_id, args.search)
     if command == "track":

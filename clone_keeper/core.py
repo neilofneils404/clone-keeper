@@ -573,9 +573,16 @@ class Keeper:
             if directory.name.startswith("."):
                 continue
             try:
-                if directory.is_symlink():
-                    raise KeeperError(f"Symlinked plugin directory is unsupported: {directory}")
                 if not directory.is_dir() or not (directory / "manifest.json").exists():
+                    continue
+                if directory.is_symlink():
+                    # Linked development plugins are common; only a linked clone matters.
+                    try:
+                        info = json.loads((directory / "manifest.json").read_bytes())
+                    except (OSError, ValueError):
+                        continue
+                    if isinstance(info, dict) and isinstance(info.get("omarchy"), dict) and info["omarchy"].get("clonedFrom"):
+                        raise KeeperError(f"Symlinked plugin directory is unsupported: {directory}")
                     continue
                 info = object_json(read_file(directory / "manifest.json").data, str(directory / "manifest.json"))
                 if not isinstance(info.get("omarchy"), dict) or not info["omarchy"].get("clonedFrom"):
@@ -601,12 +608,18 @@ class Keeper:
                     upstream = as_clone(source.materialize(), meta["identity"], source_id)
                     left, right = len(changed_files(base, local)), len(changed_files(base, upstream))
                     status = "diverged" if left and right else "local-only" if left else "upstream-only" if right else "up-to-date"
-                    messages = {"diverged": "Both your clone and upstream changed. Preview a merge.",
+                    # A dry merge tells the owner whether an update needs their choices.
+                    conflicts = sum(merge_file(base.get(path), local.get(path), upstream.get(path))[1]
+                                    for path in changed_files(base, upstream)) if right else 0
+                    messages = {"diverged": "Upstream changes merge cleanly with yours." if not conflicts
+                                else f"Upstream and your changes overlap in {conflicts} file(s). Review to choose.",
                                 "local-only": "Your customizations are recorded; upstream is unchanged.",
                                 "upstream-only": "Upstream changes are ready to review.",
                                 "up-to-date": "Clone and upstream match the recorded baseline."}
                     row.update(status=status, message=messages[status], localChangedFiles=left,
-                               upstreamChangedFiles=right, baselineVersion=meta["baselineVersion"])
+                               upstreamChangedFiles=right, baselineVersion=meta["baselineVersion"],
+                               conflicts=conflicts, baselineHash=meta["baselineHash"],
+                               upstreamHash=tree_hash(upstream))
                 except (KeeperError, OSError, ValueError, KeyError, TypeError) as exc:
                     row.update(status="error", message=str(exc))
             except (KeeperError, OSError, ValueError, KeyError, TypeError) as exc:

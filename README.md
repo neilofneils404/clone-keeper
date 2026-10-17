@@ -43,8 +43,12 @@ update. Clone identity and Omarchy's source relationship remain intact.
 - Browse clone status, create clones, resolve conflicts and inspect history in the panel.
 
 Both directory manifests and Omarchy's flat `*.manifest.json` sources with
-`clonePaths` mappings are supported. There is no background updating or network
-fetching. The panel refreshes when opened or requested; middle-click its icon to refresh.
+`clonePaths` mappings are supported. There is no network fetching, and nothing is
+merged or applied without your review. The panel checks your clones when the shell
+starts, after plugin changes and when opened; middle-click its icon to refresh.
+When an Omarchy update changes a plugin you customized, the icon lights up, its
+tooltip says whether the update merges cleanly, and a notification tells you once.
+Turn notifications off with the widget's **Update notifications** setting.
 For the live plugin directory it also shows whether each clone is enabled in Omarchy.
 
 ![Reviewing a proposed upstream change](docs/images/review.png)

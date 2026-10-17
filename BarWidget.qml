@@ -10,6 +10,7 @@ Ui.BarWidget {
   readonly property bool popoutSwitchClosing: panelLoader.item ? panelLoader.item.popoutSwitchClosing : false
   readonly property int updateCount: panelLoader.item ? panelLoader.item.updateCount : 0
   readonly property int attentionCount: panelLoader.item ? panelLoader.item.attentionCount : 0
+  readonly property string updateSummary: panelLoader.item ? panelLoader.item.updateSummary : ""
 
   function open() { if (panelLoader.item) panelLoader.item.open() }
   function close() { if (panelLoader.item) panelLoader.item.close() }
@@ -50,8 +51,8 @@ Ui.BarWidget {
     text: "󰆏"
     active: root.updateCount > 0 || root.attentionCount > 0
     tooltipText: root.attentionCount > 0 ? "Clone Keeper · A clone needs attention" : root.updateCount > 0
-      ? "Clone Keeper · " + root.updateCount + " clone(s) have upstream changes"
-      : "Clone Keeper · Review your customized plugins"
+      ? "Clone Keeper · Omarchy updates for your clones\n" + root.updateSummary
+      : "Clone Keeper · Your clones are up to date"
     onPressed: function(mouseButton) {
       if (mouseButton === Qt.MiddleButton) root.refresh()
       else if (mouseButton === Qt.LeftButton) root.toggle()

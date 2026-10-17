@@ -10,6 +10,12 @@
 - `sync` runs whenever the panel loads: it keeps each running release's built-in
   sources so they survive upgrades, and tracks clones identical to a recorded
   release, including clones made from Omarchy's own menu.
+- Status dry-runs each update's merge: the panel and bar tooltip say which clones
+  are ready to update and which need choices.
+- After an Omarchy update changes a plugin you customized, a desktop notification
+  says so once; clicking it opens Clone Keeper. Turn it off with the widget's
+  Update notifications setting. `omarchy-shell neil.clone-keeper open` opens the panel.
+- Linked development plugins that are not clones no longer produce status errors.
 
 ## 0.3.0 — local beta, 2026-09-27
 

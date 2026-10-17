@@ -85,6 +85,19 @@ QtObject {
       if (clones[i].status === "upstream-only" || clones[i].status === "diverged") total++
     return total
   }
+  // One line per clone with an upstream update, for the bar tooltip.
+  readonly property string updateSummary: {
+    var lines = []
+    for (var i = 0; i < clones.length; i++) {
+      var clone = clones[i]
+      if (clone.status !== "upstream-only" && clone.status !== "diverged") continue
+      lines.push(String(clone.name || clone.id) + ": " + (clone.conflicts > 0
+        ? clone.conflicts + " file(s) need your choice" : "ready to update"))
+    }
+    return lines.join("\n")
+  }
+  // Panel binds this to the widget's notifyUpdates setting.
+  property bool notify: false
   readonly property int attentionCount: {
     var total = 0
     for (var i = 0; i < clones.length; i++)
@@ -121,7 +134,9 @@ QtObject {
   // Omarchy loads this panel at shell start and after every plugin change.
   // Sync keeps each running release's sources and tracks unedited clones,
   // including ones made from Omarchy's own menu, then status is shown.
-  function startup() { root.run("sync", ["sync", "--json"], true, true) }
+  function startup() {
+    root.run("sync", ["sync"].concat(root.notify ? ["--notify"] : []).concat(["--json"]), true, true)
+  }
 
   // A shown outcome belongs to that viewing; reopening starts from status.
   onPanelOpenChanged: if (!panelOpen) { root.notice = ""; root.restartSuggested = false }

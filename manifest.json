@@ -13,6 +13,16 @@
     "description": "Create tracked clones, review upstream changes, resolve conflicts and restore previous versions.",
     "category": "System",
     "allowMultiple": false,
-    "defaultSection": "right"
+    "defaultSection": "right",
+    "defaults": { "notifyUpdates": true },
+    "schema": [
+      {
+        "key": "notifyUpdates",
+        "type": "boolean",
+        "label": "Update notifications",
+        "description": "Notify once when an Omarchy update changes a plugin you customized.",
+        "defaultValue": true
+      }
+    ]
   }
 }

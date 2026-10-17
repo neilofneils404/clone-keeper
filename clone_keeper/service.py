@@ -115,7 +115,7 @@ class Workflow:
         with clone_lock(self.keeper, ident):
             return self.keeper.track(ident, baseline, origin)
 
-    def sync(self, origins):
+    def sync(self, origins, notify=False):
         """Record the running release's sources and track clones identical to one.
 
         Runs whenever the panel loads, which Omarchy does at shell start and
@@ -140,7 +140,43 @@ class Workflow:
                         result["tracked"].append(row["id"])
             except (KeeperError, OSError, ValueError) as exc:
                 result["errors"].append({"path": row["path"], "message": str(exc)})
+        result["notified"] = self._notify_updates() if notify else []
         return result
+
+    def _notify_updates(self):
+        """Tell the owner once about each upstream change to a tracked clone."""
+        path = self.keeper.state_dir / "notified.json"
+        no_symlink_path(path)
+        try:
+            seen = object_json(read_file(path).data, str(path)) if path.exists() else {}
+        except KeeperError:
+            seen = {}
+        sent = []
+        for row in self.keeper.status()["clones"]:
+            if not row["tracked"] or not row["upstreamChangedFiles"] or row["status"] == "error":
+                continue
+            key = row["baselineHash"] + ":" + row["upstreamHash"]
+            if seen.get(row["id"]) == key:
+                continue
+            count, conflicts = row["upstreamChangedFiles"], row.get("conflicts", 0)
+            detail = (f"Your choices are needed in {conflicts} file(s)." if conflicts
+                      else "It merges cleanly with your customizations." if row["localChangedFiles"]
+                      else "You have no customizations in the way.")
+            try:
+                process = subprocess.run(
+                    ["omarchy-notification-send", "-g", "\U000f018f", f"Omarchy update for {row['name']}",
+                     f"Upstream changed {count} file(s). {detail} Click to review.",
+                     "--exec", "omarchy-shell", "neil.clone-keeper", "open"],
+                    capture_output=True, timeout=10)
+            except (OSError, subprocess.TimeoutExpired):
+                break
+            if process.returncode:
+                break
+            seen[row["id"]] = key
+            sent.append(row["id"])
+        if sent:
+            atomic_json(path, seen)
+        return sent
 
     def clone_id_for(self, source_id, clone_id=None):
         plugin_id(source_id)
