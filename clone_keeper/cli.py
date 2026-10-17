@@ -41,13 +41,14 @@ def parser():
         "dismiss": "Forget recorded outcomes of detached operations",
         "restart-shell": "Restart the Omarchy shell so updated clones load (installed plugins only)",
         "edit": "Open a saved plan's candidate file in your Omarchy editor (installed plugins only)",
-        "prune": "List, then with --yes remove, history that undo, recovery and ancestry no longer need"}
+        "prune": "List, then with --yes remove, history that undo, recovery and ancestry no longer need",
+        "ask-agent": "Open your default coding agent to resolve one candidate file's conflicts (installed plugins only)"}
     for name, description in descriptions.items():
         command = commands.add_parser(name, help=description)
         command.add_argument("--json", action="store_true")
         if name in ("track", "origins", "preview", "export", "prepare", "history", "undo", "recover", "enable"):
             command.add_argument("clone_id")
-        if name in ("review", "resolve", "apply", "edit"):
+        if name in ("review", "resolve", "apply", "edit", "ask-agent"):
             command.add_argument("plan_id")
         if name in DETACHABLE:
             command.add_argument("--detach", action="store_true",
@@ -76,7 +77,7 @@ def parser():
             command.add_argument("--keep-releases", type=int, default=3, metavar="N",
                                  help="Newest recorded Omarchy releases to keep (default 3)")
             command.add_argument("--yes", action="store_true", help="Remove the listed items")
-        elif name == "edit":
+        elif name in ("edit", "ask-agent"):
             command.add_argument("--path", required=True)
         elif name == "resolve":
             command.add_argument("--path", required=True)
@@ -247,6 +248,8 @@ def execute(args, keeper, work):
     if command == "prune":
         from .prune import Pruner
         return Pruner(work).run(args.keep_transactions, args.keep_releases, args.yes)
+    if command == "ask-agent":
+        return work.ask_agent(args.plan_id, args.path)
     if command == "edit":
         return work.open_editor(args.plan_id, args.path)
     if command == "restart-shell":

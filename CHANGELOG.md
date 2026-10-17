@@ -28,6 +28,9 @@
   uses since its baseline's release; the panel shows it with the clone.
 - Reviews use the installed Omarchy's own manifest validator, and no longer refuse
   the bar sections newer releases add (`centerBegin`, `centerEnd`, `tray`).
+- **Ask my agent…** opens your Omarchy default coding agent on a conflicting file,
+  with the original, your and upstream's versions for context; you accept and
+  review its edit like any manual resolution (`ask-agent`).
 - `prune` lists, and with `--yes` removes, old transactions, reviews of removed
   clones and old recorded releases; **Clean up old history…** in the panel.
 

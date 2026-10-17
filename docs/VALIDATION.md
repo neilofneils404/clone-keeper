@@ -59,7 +59,7 @@ the Python wheel does not add the bar widget.
 ## Native interface
 
 - `scripts/check-ui.sh` exits zero with Qt 6.11.2 and the installed Omarchy validator.
-  It checks every root QML component and retains 25 dynamic QObject/Quickshell type
+  It checks every root QML component and retains 27 dynamic QObject/Quickshell type
   warnings; there are no lint errors.
 - `python scripts/smoke-ui.py --native-load` exits zero. It runs the actual QML
   controller against the real CLI with disposable roots and captures the actual

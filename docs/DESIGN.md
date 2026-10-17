@@ -135,6 +135,16 @@ Reviews compare current clone, baseline and upstream hashes with their snapshots
 and mark changed inputs stale. Apply requires the candidate hash the user reviewed;
 the panel additionally supplies a plan metadata hash.
 
+## Agent-assisted resolution
+
+ask-agent launches omarchy-agent-prompt, which opens the owner's chosen agent in
+a terminal, with the plan's candidate directory as its working directory. The
+prompt names the candidate file to edit and the base, local and upstream
+snapshots as read-only context. Clone Keeper does not read the agent's output or
+hold credentials; the owner accepts the edited candidate, which is reviewed,
+syntax checked and confirmed before apply. It runs only on request, in the live
+desktop, and requires a default agent.
+
 ## Shell changes and manifest validation
 
 sync also records, once per release, the names each shell/Ui and shell/Commons

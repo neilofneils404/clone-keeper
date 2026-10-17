@@ -276,6 +276,28 @@ Column {
           }
         }
       }
+      Flow {
+        width: parent.width
+        visible: root.keeper.live && !!root.keeper.selectedConflict && !root.keeper.selectedConflict.resolved
+          && (root.keeper.selectedConflict.blocks || []).length > 0
+        spacing: Style.space(8)
+        Ui.Button {
+          text: "Ask my agent…"
+          focusable: true
+          bordered: true
+          fontSize: Style.font.bodySmall
+          enabled: !root.keeper.locked
+          onClicked: root.keeper.askAgent()
+        }
+        Ui.Button {
+          text: "Use edited candidate"
+          focusable: true
+          bordered: true
+          fontSize: Style.font.bodySmall
+          enabled: !root.keeper.locked
+          onClicked: root.keeper.resolve("edited", "")
+        }
+      }
       KeeperText {
         width: parent.width
         small: true

@@ -119,7 +119,8 @@ QtObject {
       "history": "Loading history…", "enable": "Enabling your clone…",
       "dismiss": "Checking clones…", "restart": "Restarting the Omarchy shell…",
       "sync": "Checking clones…", "edit": "Opening your editor…",
-      "prune-list": "Looking for old history…", "prune": "Removing old history…"
+      "prune-list": "Looking for old history…", "prune": "Removing old history…",
+      "ask-agent": "Opening your coding agent…"
     }
     return busy ? String(labels[operation] || "Working…") : ""
   }
@@ -269,6 +270,11 @@ QtObject {
   function reviewPrune() {
     if (root.locked) return
     root.run("prune-list", ["prune", "--json"], false, false)
+  }
+
+  function askAgent() {
+    if (!root.plan || !root.selectedConflict || root.locked) return
+    root.run("ask-agent", ["ask-agent", root.plan.planId, "--path", root.selectedConflict.path, "--json"], false, false)
   }
 
   function openEditor() {
@@ -548,6 +554,8 @@ QtObject {
     } else if (root.operation === "prune") {
       root.notice = "Removed " + (result.removed || []).length + " item(s) of old history."
       if (root.page === "history") Qt.callLater(root.history)
+    } else if (root.operation === "ask-agent") {
+      root.notice = String(result.message)
     } else if (root.operation === "edit") {
       root.notice = "Opened " + String(result.path) + ". Save it, then choose Use edited candidate."
     } else if (root.operation === "restart") {

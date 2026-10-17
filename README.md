@@ -143,7 +143,10 @@ lines and upstream's. Choose them one at a time; the rest of the file stays merg
 The file counts as resolved once its last overlap is chosen. Without `--conflict`,
 each `--take` choice uses one whole version of the file, including its changes
 outside the conflict. In the panel, **Open in editor** opens the candidate file
-in your Omarchy editor for a manual merge.
+in your Omarchy editor for a manual merge, and **Ask my agent…** opens your default
+coding agent (`omarchy default agent`) on that file with the three versions for
+context (`ask-agent PLAN_ID --path FILE`). You watch it work in its terminal; its
+edit counts only after you choose **Use edited candidate**, review it and apply.
 
 For a manual merge, edit the file inside the printed candidate directory and
 accept it with `resolve PLAN_ID --path BarWidget.qml --take edited`. Re-review

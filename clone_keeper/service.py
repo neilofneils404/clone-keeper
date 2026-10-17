@@ -344,6 +344,51 @@ class Workflow:
             raise KeeperError(f"Could not start omarchy-launch-editor: {exc}") from exc
         return {"path": str(target), "message": "Editor opened."}
 
+    def ask_agent(self, plan_id, path):
+        """Open the owner's default coding agent on one conflicting candidate file.
+
+        The agent works where the owner can watch it, in the plan's candidate
+        directory. Its edit counts only once the owner accepts the edited
+        candidate, which is then reviewed and confirmed like any other.
+        """
+        from .core import safe_relative
+        if not self.is_live():
+            raise KeeperError("Asking an agent is only available for the installed user plugin directory")
+        try:
+            agent = subprocess.run(["omarchy-default-agent"], capture_output=True, text=True, timeout=5).stdout.strip()
+        except (OSError, subprocess.TimeoutExpired):
+            agent = ""
+        if not agent:
+            raise KeeperError("Choose a default coding agent first: omarchy default agent")
+        record, _ = self.plans.load(plan_id)
+        path = safe_relative(path)
+        root = self.plans.path(plan_id)
+        target = root / "candidate" / path
+        no_symlink_path(target)
+        if not target.is_file():
+            raise KeeperError("That file is not in the candidate; choose a file present in the result")
+        versions = {name: root / name / path for name in ("base", "local", "upstream")}
+        listed = "\n".join(f"- {label}: {versions[name]}" + ("" if versions[name].is_file() else " (absent)")
+                           for name, label in (("base", "Original (the recorded baseline)"),
+                                               ("local", "The owner's customized clone"),
+                                               ("upstream", "The new Omarchy version")))
+        prompt = (
+            f"Resolve the merge conflicts in {target}, part of my customized copy {record['cloneId']} "
+            f"of the Omarchy shell plugin {record['sourceId']}. The file contains git diff3 conflict blocks: "
+            "<<<<<<< Your clone, ||||||| Recorded baseline, =======, >>>>>>> Current upstream.\n\n"
+            f"For context, these are read-only:\n{listed}\n\n"
+            "Keep my customizations and also keep Omarchy's improvements wherever both can coexist. "
+            "Where they truly conflict, prefer my intent and explain the trade-off. Remove every conflict "
+            f"marker. Edit only {target}; do not change other files, run the plugin, or restart the shell. "
+            "When done, summarize each choice briefly. I will review the result in Clone Keeper before applying it.")
+        try:
+            subprocess.Popen(["omarchy-agent-prompt", prompt], cwd=root / "candidate", stdin=subprocess.DEVNULL,
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+        except OSError as exc:
+            raise KeeperError(f"Could not start omarchy-agent-prompt: {exc}") from exc
+        return {"path": str(target), "agent": agent, "prompt": prompt,
+                "message": f"Opened {agent} on {path}. When it is done, choose Use edited candidate to review its result."}
+
     def verify_update(self, clone_id):
         """After applying to an enabled clone, load it and undo the update if it fails to load."""
         from .health import restart_and_check
