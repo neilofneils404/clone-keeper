@@ -431,7 +431,9 @@ class Workflow:
         if health["healthy"]:
             return {"restarted": True, "health": health,
                     "message": "Updated, and the restarted shell loaded it. The previous version is available in Undo."}
-        first = health["failures"][0]
+        # Name the clone's files relative to it; the full path is in health.failures.
+        first = health["failures"][0].replace("file://" + str(self.keeper.plugins_dir / clone_id) + "/", "")
+        first = first.removeprefix("WARN qml: ")
         try:
             self.undo(clone_id)
         except KeeperError as exc:

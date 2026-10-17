@@ -1,18 +1,26 @@
 # Validation
 
-Recorded on 2026-09-22 for the 0.2.0 local beta and rerun on 2026-09-27 for the
-0.3.0 local beta, after the pre-release review fixes.
+Recorded on 2026-09-22 for the 0.2.0 local beta, rerun on 2026-09-27 for the
+0.3.0 local beta, and on 2026-10-17 for the 0.4.0 local beta.
 
 ## Automated engine and CLI checks
 
-- **137 tests pass on Python 3.14.7 and on Python 3.11.16**, both with Git 2.55.0
-  and no skips. The 3.11 runtime was a uv-managed interpreter, not the system Python.
+- **193 tests pass on Python 3.14.7 and on Python 3.11.16** (2026-10-17), both with
+  Git 2.55.0 and no skips. The 3.11 runtime was a uv-managed interpreter.
+- 0.4.0 adds coverage for origin ranking from package archives and pacman's log,
+  release recording and automatic tracking, notification de-duplication, dry-run
+  conflict counts, per-conflict resolution, pruning retention rules, shell API
+  fingerprints, the installed Omarchy validator, the load check and its undo
+  (stubbed restart), agent and editor hand-off (stubbed launch), and git plugins:
+  ignored files, fast-forward only, stale inputs, hooks not run, prune, and crash
+  recovery on both sides of the directory exchange.
 - The new regressions terminate a process during clone/state staging for both
   apply and undo, then verify recovery. They also cover interrupted replacement
   of an existing stage, concurrent candidate edits before/during exchange, late
   editor saves through open files, and detached root rejection before any writes.
 - The demo, `scripts/check-ui.sh` and `scripts/smoke-ui.py --native-load` were
-  rerun on 2026-09-27 and pass. The UI check reports 22 type warnings.
+  rerun on 2026-10-17 and pass. The UI check reports 27 type warnings, all dynamic
+  QObject members (such as Style.font fields) the standalone linter cannot resolve.
 - Tests use disposable source, plugin and state roots. Read-only commands are
   checked against before/after snapshots; fixture commands cannot call live shell IPC.
 - Baseline coverage includes current-source verification, known historical originals,
@@ -43,7 +51,7 @@ Recorded on 2026-09-22 for the 0.2.0 local beta and rerun on 2026-09-27 for the
 ## Packaging
 
 - The project metadata, plugin manifest, Python module and CLI consistently report
-  version **0.3.0**; the Python package requires Python 3.11 or newer.
+  version **0.4.0**; the Python package requires Python 3.11 or newer.
 - A fresh source archive includes the native QML and manifest, bundled launcher,
   Python modules, complete tests, scripts, documentation/images and CI configuration.
   After unpacking that archive, **all 137 tests pass on Python 3.14.7 with no skips**;
@@ -101,6 +109,56 @@ python scripts/smoke-ui.py --native-load --output /tmp/clone-keeper-ui-review
 The output directory must not exist. The smoke leaves its disposable fixtures,
 logs and screenshots there for inspection. Omit --native-load for offscreen-only
 testing. The native load requires an existing Wayland session.
+
+## Desktop pilot (2026-10-17, 0.4.0)
+
+Run on Omarchy 4.0.4-1 and Hyprland 0.56.2 in a nested Hyprland session with a
+disposable HOME, a copied OMARCHY_PATH and a private D-Bus session. The nested
+Hyprland loaded only the shell; Omarchy's autostart was not run because it imports
+the session environment into the systemd user manager. A `systemctl` shim answered
+`--user show-environment` with the copied path and ignored every other call (73,
+including invitation service restarts), so omarchy-restart-shell restarted only
+the nested shell. Afterwards the real shell PID and user-manager environment were
+unchanged. Clone Keeper was installed from the committed branch with
+`omarchy plugin add`; changes were driven from the CLI with `--detach`, the path
+the panel uses, and checked with screenshots. Keyboard and mouse driving of the
+panel were not repeated.
+
+Passed:
+
+- A Clone Keeper clone, enabled and customized, then a simulated upstream release:
+  status reported a clean merge, and the panel's startup sync sent one notification
+  ("Omarchy update for My Clock … merges cleanly"), present in the shell's history.
+- `omarchy-shell neil.clone-keeper open` opens the panel.
+- Apply with `--restart-shell`: the shell restarted (new PID), the clone loaded and
+  the update was kept, with both the local and upstream changes.
+- An upstream release adding an unknown QML type merged cleanly and passed the
+  syntax check. After apply the restarted shell logged `Plugin widget pilot.clock
+  failed: … is not a type`; Clone Keeper undid the update, restarted again, and the
+  clone matched its previous bytes. A fixed release applied right after was kept.
+- Open in editor opened the candidate in nvim; Ask my agent launched (a stub
+  recording) with the candidate directory as working directory and the expected
+  prompt. A saved manual resolution was accepted, applied and loaded.
+- A git-installed plugin with a local edit, added by `omarchy plugin add`: fetch
+  found the new origin commit, the update merged and loaded after restart, `git
+  status` showed only the local edit, and undo restored the old commit and edit.
+
+Findings, fixed and covered by tests:
+
+- `qs log -p <config>` could return the previous shell instance's log after a
+  restart. The load check now requires a new shell PID and reads its log by PID.
+- A failed or undone outcome was shown once, then cleared by the next status
+  refresh while its record was already dismissed. Such outcomes now stay for the
+  panel viewing, as notices do.
+
+Not verified:
+
+- The full notification click: in the pilot, the shell runs click commands in a
+  login shell, which reset OMARCHY_PATH to the installed Omarchy, so the click
+  targeted the real shell (where Clone Keeper was not installed) rather than the
+  nested one. Its two halves were verified separately: the notification carries
+  `omarchy-shell neil.clone-keeper open`, and that command opens the panel.
+- A real agent session, a physical session, multiple monitors and replacement bars.
 
 ## Desktop pilot (2026-09-27)
 

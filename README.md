@@ -6,8 +6,11 @@ Keep customized Omarchy plugins up to date without losing your changes. Clone
 Keeper saves their original source, compares your edits with newer built-ins,
 and lets you review, resolve and apply the combined result—with recovery and undo.
 
-**Version 0.3.0 · local beta.** The complete maintenance workflow is implemented
-in a native panel and a standalone CLI. See [validation](docs/VALIDATION.md) for
+**Version 0.4.0 · local beta.** The complete maintenance workflow is implemented
+in a native panel and a standalone CLI. It finds existing clones' originals,
+tracks new ones automatically, notifies you of updates, applies clean ones in one
+step with an automatic load check, and also maintains git-installed plugins you
+have edited. See [validation](docs/VALIDATION.md) for
 tested behavior and the remaining desktop release checks.
 
 ## Why it exists

@@ -93,7 +93,7 @@ class VerifyTests(unittest.TestCase):
     def test_load_failure_is_undone_and_shell_restarted_again(self):
         result = self.verify(LOG)
         self.assertTrue(result["undone"])
-        self.assertIn("Foo is not a type", result["message"])
+        self.assertIn("Plugin widget neil.audio failed: Panel.qml:12:5: Foo is not a type", result["message"])
         self.work.transactions.undo.assert_called_once_with("neil.audio")
         self.assertEqual(self.work.restart_shell.call_count, 2)
 

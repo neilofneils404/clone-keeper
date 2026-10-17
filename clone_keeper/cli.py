@@ -163,8 +163,8 @@ def human(result, command):
         for item in result["items"]:
             label = item.get("cloneId") or item.get("sourceId")
             print(f"{verb} {item['kind']} {item['id'][:12]} ({label}, {item['bytes'] // 1024} KiB): {item['reason']}")
-        print(f"{'Nothing to remove.' if not result['items'] else f'{result['bytes'] // 1024} KiB in total.'}"
-              + (" Run again with --yes to remove." if result["dryRun"] and result["items"] else ""))
+        total = f"{result['bytes'] // 1024} KiB in total." if result["items"] else "Nothing to remove."
+        print(total + (" Run again with --yes to remove." if result["dryRun"] and result["items"] else ""))
         for error in result["errors"]:
             print(f"Skipped {error['path']}: {error['message']}", file=sys.stderr)
     elif command == "sync":

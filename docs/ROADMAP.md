@@ -1,5 +1,15 @@
 # Roadmap
 
+## 0.4.0 local beta — implemented
+
+- Origins of existing clones from releases on this machine, with recorded evidence.
+- Startup sync: recorded release sources, automatic tracking of unedited clones.
+- Dry-run merge status, update tooltip and one-time update notifications.
+- One-click clean updates; shell restart with log-based load check and auto-undo.
+- Per-conflict resolution, editor hand-off and opt-in agent-assisted resolution.
+- Reviewable pruning, shell API change warnings, installed Omarchy validator.
+- Git-installed plugins with local edits: fetch on request, review, apply, undo.
+
 ## 0.3.0 local beta — implemented
 
 - Directory and flat built-in source discovery, normalization and identity.
@@ -26,10 +36,7 @@ submit the marketplace listing.
 
 ## Later, driven by use
 
-- Help locate original source from historical Omarchy releases.
-- Explicit provenance for selected third-party forks.
 - Contribute original source revision metadata to Omarchy's clone command.
-- Optional update notifications with clear freshness and no automatic application.
 - Richer semantic manifest merging if real conflicts justify it.
 
 No cloud service or background auto-merge is planned.

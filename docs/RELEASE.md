@@ -2,7 +2,7 @@
 
 ## Current status
 
-0.3.0 is a local beta with the full maintenance workflow. No GitHub repository,
+0.4.0 is a local beta with the full maintenance workflow. No GitHub repository,
 release tag or marketplace issue has been created by this development workflow.
 The proposed public repository is neilofneils404/clone-keeper. The installed plugin
 ID remains neil.clone-keeper; check catalog uniqueness before publication.

@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.0 — local beta, 2026-10-17
 
 - Find an existing clone's original among Omarchy releases on this machine:
   the installed tree, pacman's package cache, or supplied trees and packages.
@@ -16,6 +16,8 @@
   says so once; clicking it opens Clone Keeper. Turn it off with the widget's
   Update notifications setting. `omarchy-shell neil.clone-keeper open` opens the panel.
 - Linked development plugins that are not clones no longer produce status errors.
+- Failed and undone background outcomes stay visible for the panel viewing instead
+  of being cleared by the next status refresh.
 - **Update** applies a clean update in one step: it prepares the plan and confirms
   that exact result, or opens the review when choices are needed.
 - Applying to an enabled clone restarts the shell, checks its log for the clone's
