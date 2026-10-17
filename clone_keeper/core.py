@@ -363,6 +363,25 @@ def merge_file(base: File | None, local: File | None, upstream: File | None):
         return File(process.stdout, mode), conflict, reason
 
 
+def merge_trees(base: Tree, local: Tree, upstream: Tree) -> tuple[list[dict], Tree]:
+    """Three-way merge every path; return per-file changes and the candidate."""
+    changes, candidate = [], {}
+    for path in sorted(base.keys() | local.keys() | upstream.keys()):
+        original, ours, theirs = base.get(path), local.get(path), upstream.get(path)
+        merged, conflict, reason = merge_file(original, ours, theirs)
+        if merged is not None:
+            candidate[path] = merged
+        if original == ours == theirs:
+            continue
+        status = ("conflict" if conflict else "local-only" if theirs == original
+                  else "upstream-only" if ours == original else "merged")
+        changes.append({"path": path, "status": status, "conflict": conflict,
+                        "reason": reason, "diff": file_diff(path, ours, merged),
+                        "localDiff": file_diff(path, original, ours),
+                        "upstreamDiff": file_diff(path, original, theirs)})
+    return changes, candidate
+
+
 def file_diff(path: str, local: File | None, candidate: File | None) -> str:
     old, new = local.data if local else b"", candidate.data if candidate else b""
     mode_diff = ""
@@ -396,9 +415,10 @@ def validate_candidate(tree: Tree, clone_id: str, source_id: str) -> list[str]:
     if type(value.get("schemaVersion")) is not int or value.get("schemaVersion") != 1:
         errors.append("Manifest schemaVersion must be the number 1")
     if value.get("id") != clone_id or clone_id.startswith("omarchy."):
-        errors.append("Candidate must retain the non-reserved clone ID")
+        errors.append("Candidate must retain the non-reserved plugin ID")
     metadata = value.get("omarchy")
-    if not isinstance(metadata, dict) or metadata.get("clonedFrom") != source_id:
+    # source_id is None for an installed third-party plugin, which is not a clone.
+    if source_id is not None and (not isinstance(metadata, dict) or metadata.get("clonedFrom") != source_id):
         errors.append("Candidate must retain omarchy.clonedFrom")
     for field in ("name", "version"):
         if not isinstance(value.get(field), str) or not value[field]:
@@ -640,20 +660,7 @@ class Keeper:
         if source is None:
             raise KeeperError(f"Upstream source is missing: {source_id}")
         upstream = as_clone(source.materialize(), meta["identity"], source_id)
-        changes, candidate = [], {}
-        for path in sorted(base.keys() | local.keys() | upstream.keys()):
-            original, ours, theirs = base.get(path), local.get(path), upstream.get(path)
-            merged, conflict, reason = merge_file(original, ours, theirs)
-            if merged is not None:
-                candidate[path] = merged
-            if original == ours == theirs:
-                continue
-            status = ("conflict" if conflict else "local-only" if theirs == original
-                      else "upstream-only" if ours == original else "merged")
-            changes.append({"path": path, "status": status, "conflict": conflict,
-                            "reason": reason, "diff": file_diff(path, ours, merged),
-                            "localDiff": file_diff(path, original, ours),
-                            "upstreamDiff": file_diff(path, original, theirs)})
+        changes, candidate = merge_trees(base, local, upstream)
         validation = validate_candidate(candidate, ident, source_id)
         conflicts = sum(change["conflict"] for change in changes)
         report = {"schemaVersion": 1, "cloneId": ident, "sourceId": source_id,

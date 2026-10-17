@@ -22,6 +22,26 @@ class Workflow:
         self.plans = Plans(keeper)
         self.transactions = Transactions(keeper)
         self.operations = Operations(keeper.state_dir)
+        from .gitplugins import GitPlugins
+        self.git = GitPlugins(self)
+
+    def is_git(self, ident):
+        return self.git.is_git_plugin(ident)
+
+    def prepare(self, ident):
+        return self.git.prepare(ident) if self.is_git(ident) else self.plans.prepare(ident)
+
+    def apply(self, plan_id, expect, expect_plan=None):
+        record, _ = self.plans.load(plan_id)
+        if record.get("kind") == "git":
+            return self.git.apply(plan_id, expect, expect_plan)
+        return self.transactions.apply(plan_id, expect, expect_plan)
+
+    def undo(self, ident):
+        return self.git.undo(ident) if self.is_git(ident) else self.transactions.undo(ident)
+
+    def history(self, ident):
+        return self.git.history(ident) if self.is_git(ident) else self.transactions.history(ident)
 
     def sources(self):
         prefix = re.sub(r"[^A-Za-z0-9_-]", "-", getpass.getuser()).strip("-") or "user"
@@ -54,6 +74,13 @@ class Workflow:
 
     def status(self):
         result = self.keeper.status()
+        for ident in self.git.plugins():
+            try:
+                row = self.git.row(ident)
+                if row is not None:
+                    result["clones"].append(row)
+            except (KeeperError, OSError, ValueError, KeyError) as exc:
+                result["errors"].append({"path": str(self.git.path(ident)), "message": str(exc)})
         known = {row["id"] for row in result["clones"]}
         directory = self.keeper.state_dir / "clones"
         no_symlink_path(directory)
@@ -83,12 +110,15 @@ class Workflow:
             row.update(latestTransaction=None, pendingTransaction=None, canUndo=False, latestPlan=None,
                        runningOperation=running, enabled=enabled.get(row["id"]) if enabled is not None else None)
             try:
-                history = self.transactions.history(row["id"])
+                history = self.history(row["id"]) if row.get("kind") == "git" else self.transactions.history(row["id"])
                 records = history["transactions"]
                 row["latestTransaction"] = records[-1] if records else None
                 row["pendingTransaction"] = history["pendingTransaction"]
                 row["canUndo"] = any(item["status"] == "applied" for item in records) and not history["pendingTransaction"]
-                if row["tracked"]:
+                if row.get("kind") == "git":
+                    row["latestPlan"] = next((plan for plan in plans if plan["cloneId"] == row["id"]
+                                              and plan["baselineHash"] == row.get("baselineHash")), None)
+                elif row["tracked"]:
                     meta, _ = self.keeper.load_baseline(row["id"])
                     if meta.get("creationPending"):
                         row["pendingTransaction"] = "creation"
@@ -107,7 +137,7 @@ class Workflow:
         current, after = result["upstreamVersion"], None
         for row in result["clones"]:
             row["hostWarnings"] = []
-            if not row["tracked"] or row["status"] == "error":
+            if not row["tracked"] or row["status"] == "error" or row.get("kind") == "git":
                 continue
             try:
                 meta, _ = self.keeper.load_baseline(row["id"])
@@ -274,6 +304,8 @@ class Workflow:
             raise KeeperError("That ID is already referenced by the shell. Choose a new ID before creating a disabled clone.")
 
     def recover(self, clone_id):
+        if self.is_git(clone_id):
+            return self.git.recover(clone_id)
         with clone_lock(self.keeper, clone_id):
             state = self.keeper.state_path(clone_id)
             if state.exists():
@@ -401,7 +433,7 @@ class Workflow:
                     "message": "Updated, and the restarted shell loaded it. The previous version is available in Undo."}
         first = health["failures"][0]
         try:
-            self.transactions.undo(clone_id)
+            self.undo(clone_id)
         except KeeperError as exc:
             return {"restarted": True, "health": health, "undone": False,
                     "warning": f"The update kept {clone_id} from loading ({first}), and undoing it failed: {exc}. "

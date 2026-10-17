@@ -76,6 +76,20 @@ def main():
     (audio_clone / "manifest.json").write_text(json.dumps(manifest))
     (audio_clone / "BarWidget.qml").write_text(original_qml.replace("showDate: true", "showDate: false"))
     (audio_source / "BarWidget.qml").write_text(original_qml.replace("refreshSeconds: 60", "refreshSeconds: 45"))
+    # A git-installed third-party plugin with a local edit; its origin has moved on.
+    git_env = {**os.environ, "GIT_AUTHOR_NAME": "fixture", "GIT_AUTHOR_EMAIL": "fixture@example.invalid",
+               "GIT_COMMITTER_NAME": "fixture", "GIT_COMMITTER_EMAIL": "fixture@example.invalid"}
+    origin = output / "origin"
+    origin.mkdir()
+    (origin / "manifest.json").write_text(json.dumps({"schemaVersion": 1, "id": "acme.widget", "name": "Widget",
+        "version": "1.0.0", "kinds": ["bar-widget"], "entryPoints": {"barWidget": "BarWidget.qml"}}))
+    (origin / "BarWidget.qml").write_text(original_qml)
+    for git_args in (["init", "-q", "-b", "main"], ["add", "."], ["commit", "-qm", "one"]):
+        subprocess.run(["git", *git_args], cwd=origin, check=True, env=git_env)
+    subprocess.run(["git", "clone", "-q", str(origin), str(plugins / "acme.widget")], check=True, env=git_env)
+    (plugins / "acme.widget/BarWidget.qml").write_text(original_qml.replace("showDate: true", "showDate: false"))
+    (origin / "BarWidget.qml").write_text(original_qml.replace("refreshSeconds: 60", "refreshSeconds: 15"))
+    subprocess.run(["git", "commit", "-qam", "two"], cwd=origin, check=True, env=git_env)
     # An unedited copy made outside Clone Keeper is tracked when the panel loads.
     shutil.copytree(audio_source, plugins / "demo.audio-copy")
     manifest.update(id="demo.audio-copy", name="Audio Copy")
@@ -168,7 +182,7 @@ ShellRoot {
       switch (test.step) {
       case 0: keeper.startup(); test.step++; break
       case 1:
-        if (!test.check(keeper.hasLoaded && keeper.clones.length === 3, "initial status")) return
+        if (!test.check(keeper.hasLoaded && keeper.clones.length === 4, "initial status")) return
         if (!test.check(keeper.clones.filter(function(item) { return item.id === "demo.audio-copy" && item.tracked }).length === 1
                         && keeper.notice.indexOf("demo.audio-copy") !== -1, "sync tracks unedited clone")) return
         test.capture("01-clones"); test.step++; break
@@ -192,6 +206,24 @@ ShellRoot {
       case 104: keeper.confirmAction(); test.step++; break
       case 105:
         if (!test.check(keeper.selectedClone.status === "local-only" && !keeper.errorText, "one-click update applied")) return
+        test.step = 400; break
+      // A git-installed plugin: check its origin, then update it the same way.
+      case 400:
+        keeper.selectClone("acme.widget")
+        if (!test.check(keeper.selectedClone.kind === "git" && keeper.selectedClone.status === "local-only",
+                        "git plugin with local edit")) return
+        keeper.fetchUpdates(); test.step++; break
+      case 401:
+        if (!test.check(keeper.selectedClone.status === "diverged" && keeper.selectedClone.conflicts === 0,
+                        "fetched git update: " + JSON.stringify(keeper.selectedClone))) return
+        test.capture("01-git-plugin"); test.step++; break
+      case 402: keeper.update(); test.step++; break
+      case 403:
+        if (!test.check(keeper.confirmation && keeper.confirmation.button === "Update", "git update confirmation")) return
+        keeper.confirmAction(); test.step++; break
+      case 404:
+        if (!test.check(keeper.selectedClone.status === "local-only" && keeper.selectedClone.canUndo && !keeper.errorText,
+                        "git update applied")) return
         test.step = 3; break
       case 3:
         keeper.loadSources(); test.step++; break
@@ -353,11 +385,15 @@ ShellRoot {
     commands = [json.loads(line) for line in (output / "commands.jsonl").read_text().splitlines()]
     applies = [item for item in commands if item[0] == "apply"]
     # The one-click update and the reviewed apply each bind both fingerprints.
-    assert len(applies) == 2 and all("--expect" in item and "--expect-plan" in item for item in applies), applies
+    assert len(applies) == 3 and all("--expect" in item and "--expect-plan" in item for item in applies), applies
     assert "showDate: false" in (plugins / "demo.audio/BarWidget.qml").read_text()
     assert "refreshSeconds: 45" in (plugins / "demo.audio/BarWidget.qml").read_text()
+    widget = (plugins / "acme.widget/BarWidget.qml").read_text()
+    assert "showDate: false" in widget and "refreshSeconds: 15" in widget, widget
+    status = subprocess.run(["git", "status", "--porcelain"], cwd=plugins / "acme.widget", capture_output=True, text=True)
+    assert status.stdout.strip() == "M BarWidget.qml", status.stdout
     for item in commands:
-        if item[0] in ("clone", "enable", "apply", "undo", "recover"):
+        if item[0] in ("clone", "enable", "apply", "undo", "recover", "fetch"):
             assert "--detach" in item, f"Panel must detach changes that reload it: {item}"
     restarts = [item for item in commands if item[0] == "restart-shell"]
     assert len(restarts) == 1, f"Expected one refused restart request: {restarts}"

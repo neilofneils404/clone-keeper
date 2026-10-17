@@ -135,6 +135,27 @@ Reviews compare current clone, baseline and upstream hashes with their snapshots
 and mark changed inputs stale. Apply requires the candidate hash the user reviewed;
 the panel additionally supplies a plan metadata hash.
 
+## Git-installed plugins
+
+A plugin directory with a .git directory, a manifest and no omarchy.clonedFrom is
+a git plugin. Its original is the HEAD commit's tree, its local version is the
+working tree without git-ignored files, and upstream is FETCH_HEAD when HEAD is
+its ancestor; local commits upstream lacks are refused. Executable bits are
+compared as git records them. Git runs with hooks and fsmonitor disabled and no
+terminal prompts; fetch runs `git fetch origin HEAD`, as omarchy-plugin-update does.
+
+Plans use the shared plan store with kind "git", recording HEAD, the target commit
+and the branch; staleness compares those and the working tree. Apply copies the
+whole directory, .git included, into a staging directory on the same filesystem,
+updates the copy's branch (or detached HEAD) with update-ref from the reviewed
+HEAD, resets its index with read-tree, replaces non-ignored working files with
+the candidate, and verifies the copy before journaling. The journal at
+git-transactions/<id>/<transaction>/ is written as prepared, the directories are
+exchanged atomically, and it is marked applied; the displaced directory is the
+undo backup. Undo requires the live plugin to still match the applied state and
+the backup its original. Recovery marks an interrupted update applied or
+abandoned (or undone) by comparing HEAD and the working tree with both sides.
+
 ## Agent-assisted resolution
 
 ask-agent launches omarchy-agent-prompt, which opens the owner's chosen agent in

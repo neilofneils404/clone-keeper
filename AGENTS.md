@@ -15,6 +15,8 @@ plugins with recorded ancestry, reviewed merges, recovery and undo.
 - Never infer historical ancestry from today's source. Baselines must be captured
   at creation, verified against an unchanged clone, or supplied explicitly.
 - Preserve clone identity, binary files, modes and deletion conflicts.
+- Git plugins: never run repository hooks or checkouts on live plugins, keep
+  git-ignored files, and fetch only on an explicit request.
 - Status/review must not write live plugins or execute candidate code.
 - Apply requires the reviewed candidate hash, rechecks inputs and retains backups.
   Advance the baseline to upstream, never to the locally customized result.

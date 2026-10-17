@@ -59,6 +59,21 @@ class Pruner:
                                   "paths": [str(path) for path in paths], "bytes": sum(map(size, paths)),
                                   "reason": f"Older than the newest {keep_transactions} for this clone; "
                                             "undo cannot step back this far after it is removed."})
+        for ident in self.work.git.plugins():
+            try:
+                records = self.work.git.history(ident)["transactions"]
+            except (KeeperError, OSError, ValueError) as exc:
+                errors.append({"path": str(self.work.git.path(ident)), "message": str(exc)})
+                continue
+            if any(record["status"] not in FINAL | {"abandoned"} for record in records):
+                continue
+            for record in records[:-keep_transactions]:
+                paths = [path for path in (self.work.git._directory(ident) / record["id"], Path(record["stage"]).parent)
+                         if path.exists()]
+                items.append({"kind": "transaction", "cloneId": ident, "id": record["id"], "git": True,
+                              "paths": [str(path) for path in paths], "bytes": sum(map(size, paths)),
+                              "reason": f"Older than the newest {keep_transactions} for this plugin; "
+                                        "undo cannot step back this far after it is removed."})
         for plan in self.work.saved_plans()["plans"]:
             if plan["cloneId"] not in clones:
                 path = self.work.plans.path(plan["planId"])
@@ -88,8 +103,10 @@ class Pruner:
                     if item["kind"] == "transaction":
                         # Recheck under the clone lock that the journal is still final.
                         with clone_lock(self.keeper, item["cloneId"]):
-                            records = {record["id"]: record for record in self.work.transactions._records(item["cloneId"])}
-                            if records.get(item["id"], {}).get("status") not in FINAL:
+                            history = (self.work.git.history(item["cloneId"])["transactions"] if item.get("git")
+                                       else self.work.transactions._records(item["cloneId"]))
+                            records = {record["id"]: record for record in history}
+                            if records.get(item["id"], {}).get("status") not in FINAL | {"abandoned"}:
                                 continue
                             for path in item["paths"]:
                                 remove(Path(path))

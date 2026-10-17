@@ -18,7 +18,7 @@ from .core import KeeperError, no_symlink_path, object_json, plugin_id, read_fil
 from .plans import atomic_json
 
 
-DETACHABLE = ("clone", "enable", "apply", "undo", "recover")
+DETACHABLE = ("clone", "enable", "apply", "undo", "recover", "fetch")
 FINISHED = {"succeeded", "failed"}
 HANDLED = (KeeperError, OSError, ValueError, KeyError, TypeError)
 DEFAULT_MESSAGES = {
@@ -27,6 +27,7 @@ DEFAULT_MESSAGES = {
     "apply": "Candidate applied; the baseline now records upstream.",
     "undo": "Clone and recorded baseline restored.",
     "recover": "Interrupted operation recovered.",
+    "fetch": "Checked for updates.",
 }
 
 

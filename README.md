@@ -195,6 +195,22 @@ offers **Restart Omarchy shell**, which runs
 `./bin/clone-keeper restart-shell` or `omarchy restart shell`. Clone Keeper only
 restarts the shell of the desktop session using the same Omarchy installation.
 
+## Installed plugins you have edited
+
+`omarchy plugin update` refuses to update a plugin installed from git once you
+have edited it. Clone Keeper lists such plugins alongside your clones. Git already
+records their ancestry: the installed commit is the original, your working files
+are your version, and upstream is the newest commit fetched from the plugin's
+origin. **Check for updates** (`fetch PLUGIN_ID`) is the only network request
+Clone Keeper makes, and only when you ask; a failed `omarchy plugin update` leaves
+the same fetched commit behind.
+
+Review, conflict choices, **Update**, apply and undo then work as for clones.
+Applying moves the plugin to the new commit with your edits kept as uncommitted
+changes, so `git status` shows exactly what you changed. Git-ignored files, such
+as caches, are not treated as edits and are left in place. Plugins with local
+commits, submodules or symlinks are left to git.
+
 ## Existing clones and missing ancestry
 
 Each time the panel loads (at shell start and after any plugin change, including

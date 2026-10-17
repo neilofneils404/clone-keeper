@@ -42,11 +42,12 @@ def parser():
         "restart-shell": "Restart the Omarchy shell so updated clones load (installed plugins only)",
         "edit": "Open a saved plan's candidate file in your Omarchy editor (installed plugins only)",
         "prune": "List, then with --yes remove, history that undo, recovery and ancestry no longer need",
+        "fetch": "Check a git-installed plugin's origin for a newer version (network)",
         "ask-agent": "Open your default coding agent to resolve one candidate file's conflicts (installed plugins only)"}
     for name, description in descriptions.items():
         command = commands.add_parser(name, help=description)
         command.add_argument("--json", action="store_true")
-        if name in ("track", "origins", "preview", "export", "prepare", "history", "undo", "recover", "enable"):
+        if name in ("fetch", "track", "origins", "preview", "export", "prepare", "history", "undo", "recover", "enable"):
             command.add_argument("clone_id")
         if name in ("review", "resolve", "apply", "edit", "ask-agent"):
             command.add_argument("plan_id")
@@ -223,7 +224,9 @@ def execute(args, keeper, work):
     if command == "export":
         return keeper.export(args.clone_id, args.output)
     if command == "prepare":
-        return work.plans.prepare(args.clone_id)
+        return work.prepare(args.clone_id)
+    if command == "fetch":
+        return work.git.fetch(args.clone_id)
     if command == "plans":
         return work.saved_plans(args.clone_id)
     if command == "review":
@@ -235,14 +238,14 @@ def execute(args, keeper, work):
     if command == "apply":
         if args.restart_shell and not work.is_live():
             raise KeeperError("--restart-shell is only available for the installed user plugin directory")
-        result = work.refresh(work.transactions.apply(args.plan_id, args.expect, args.expect_plan))
+        result = work.refresh(work.apply(args.plan_id, args.expect, args.expect_plan))
         if args.restart_shell:
             result.update(work.verify_update(result["cloneId"]))
         return result
     if command == "history":
-        return work.transactions.history(args.clone_id)
+        return work.history(args.clone_id)
     if command == "undo":
-        return work.refresh(work.transactions.undo(args.clone_id))
+        return work.refresh(work.undo(args.clone_id))
     if command == "dismiss":
         return work.operations.dismiss(args.request_ids)
     if command == "prune":

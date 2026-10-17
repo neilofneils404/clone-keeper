@@ -120,7 +120,7 @@ QtObject {
       "dismiss": "Checking clones…", "restart": "Restarting the Omarchy shell…",
       "sync": "Checking clones…", "edit": "Opening your editor…",
       "prune-list": "Looking for old history…", "prune": "Removing old history…",
-      "ask-agent": "Opening your coding agent…"
+      "ask-agent": "Opening your coding agent…", "fetch": "Checking for updates…"
     }
     return busy ? String(labels[operation] || "Working…") : ""
   }
@@ -241,6 +241,12 @@ QtObject {
     if (!root.selectedId || root.locked) return
     root.quickUpdate = true
     root.prepare()
+  }
+
+  // Network: asks a git-installed plugin's origin for its newest version.
+  function fetchUpdates() {
+    if (!root.selectedId || root.locked) return
+    root.run("fetch", ["fetch", root.selectedId, "--detach", "--json"])
   }
 
   function prepare() {
@@ -521,7 +527,7 @@ QtObject {
       }
     } else if (root.operation === "history") {
       root.transactions = Array.isArray(result.transactions) ? result.transactions : []
-    } else if (["clone", "track", "apply", "undo", "recover", "enable"].indexOf(root.operation) !== -1) {
+    } else if (["clone", "track", "apply", "undo", "recover", "enable", "fetch"].indexOf(root.operation) !== -1) {
       if (root.operation === "clone") {
         root.selectedId = String(result.cloneId || root.requestedClone)
         root.lastCreatedId = root.selectedId

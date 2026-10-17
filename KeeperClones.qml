@@ -69,7 +69,8 @@ Column {
           width: parent.width
           text: cloneRow.modelData.runningOperation ? "Finishing " + cloneRow.modelData.runningOperation + "… · " + cloneRow.modelData.id
             : cloneRow.modelData.pendingTransaction ? "Recovery needed · " + cloneRow.modelData.id
-            : root.keeper.statusLabel(cloneRow.modelData.status) + " · " + cloneRow.modelData.id
+            : root.keeper.statusLabel(cloneRow.modelData.status)
+              + (cloneRow.modelData.kind === "git" ? " · installed plugin · " : " · ") + cloneRow.modelData.id
           small: true
           muted: true
           warning: !cloneRow.modelData.runningOperation
@@ -287,15 +288,27 @@ Column {
         width: parent.width
         small: true
         muted: true
-        text: root.keeper.selectedClone
-          ? "Your changes: " + Number(root.keeper.selectedClone.localChangedFiles || 0)
-            + " file(s) · Upstream: " + Number(root.keeper.selectedClone.upstreamChangedFiles || 0)
-            + " file(s)\nBaseline: " + String(root.keeper.selectedClone.baselineVersion || "saved snapshot")
-          : ""
+        text: !root.keeper.selectedClone ? ""
+          : "Your changes: " + Number(root.keeper.selectedClone.localChangedFiles || 0)
+            + " file(s) · Upstream: " + Number(root.keeper.selectedClone.upstreamChangedFiles || 0) + " file(s)\n"
+            + (root.keeper.selectedClone.kind === "git"
+              ? "Installed plugin at " + String(root.keeper.selectedClone.baselineVersion)
+                + (root.keeper.selectedClone.checkedAt
+                  ? " · last checked " + Qt.formatDateTime(new Date(root.keeper.selectedClone.checkedAt), "MMM d, HH:mm")
+                  : " · never checked")
+              : "Baseline: " + String(root.keeper.selectedClone.baselineVersion || "saved snapshot"))
       }
       Flow {
         width: parent.width
         spacing: Style.space(8)
+        Ui.Button {
+          text: "Check for updates"
+          visible: !!root.keeper.selectedClone && root.keeper.selectedClone.kind === "git"
+          focusable: true
+          bordered: true
+          enabled: !root.keeper.locked
+          onClicked: root.keeper.fetchUpdates()
+        }
         Ui.Button {
           readonly property var clone: root.keeper.selectedClone
           visible: !!clone && (clone.status === "upstream-only" || clone.status === "diverged") && clone.conflicts === 0

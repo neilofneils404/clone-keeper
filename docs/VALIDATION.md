@@ -67,7 +67,8 @@ the Python wheel does not add the bar widget.
 - The UI smoke exercises startup sync tracking an unedited clone made outside Clone
   Keeper, finding an untracked clone's original in a fixture package, adopting it,
   a one-click clean update with its confirmation, choosing an overlapping text
-  conflict with Keep both, creation, all six conflict resolution
+  conflict with Keep both, checking a git-installed plugin's origin and updating it
+  with its local edit kept as an uncommitted change, creation, all six conflict resolution
   routes, reviewed apply with both fingerprints, transaction history and undo. It
   asserts every live-changing panel command is detached and that shown outcomes are
   dismissed, and checks recorded outcomes and the paused state of a running one.

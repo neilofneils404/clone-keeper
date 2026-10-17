@@ -112,7 +112,7 @@ Item {
         small: true
         muted: true
         text: root.keeper.busy ? root.keeper.activity : (root.keeper.hasLoaded
-          ? root.keeper.clones.length + " clone(s)" + (root.keeper.upstreamVersion ? " · Omarchy " + root.keeper.upstreamVersion : "")
+          ? root.keeper.clones.length + " customized plugin(s)" + (root.keeper.upstreamVersion ? " · Omarchy " + root.keeper.upstreamVersion : "")
           : "Ready to inspect your clones")
       }
     }

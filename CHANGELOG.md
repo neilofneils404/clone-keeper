@@ -24,6 +24,10 @@
 - Resolve overlapping lines one conflict at a time with Keep yours, Take upstream,
   Keep both or Use original (`resolve --conflict N`); the rest of the file stays
   merged. **Open in editor** hands a candidate file to your Omarchy editor (`edit`).
+- Git-installed plugins you have edited, which `omarchy plugin update` refuses to
+  update, get the same review, conflict choices, apply, undo and recovery. Their
+  ancestry comes from git; **Check for updates** fetches only on request; your
+  edits stay as uncommitted changes and ignored files are left alone.
 - Status warns when Omarchy removed a shell component or member a tracked clone
   uses since its baseline's release; the panel shows it with the clone.
 - Reviews use the installed Omarchy's own manifest validator, and no longer refuse

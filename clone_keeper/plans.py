@@ -141,6 +141,26 @@ def describe_blocks(file: File | None) -> list[dict]:
     return blocks
 
 
+def conflict_groups(changes: list[dict], candidate: Tree, local: Tree) -> tuple[list[dict], Tree]:
+    """Group conflicting paths for resolution, keeping the local side of collisions."""
+    conflicts = {change["path"]: change["reason"] for change in changes if change["conflict"]}
+    # A candidate cannot physically contain both `file` and `file/child`.
+    # Keep the local family for this group and require an explicit choice.
+    for name in list(candidate):
+        for parent in PurePosixPath(name).parents:
+            root = str(parent)
+            if root in candidate:
+                conflicts[root] = "File/directory collision. Choose the complete path from one side."
+    roots = []
+    for name in sorted(conflicts, key=lambda item: (len(PurePosixPath(item).parts), item)):
+        if not any(name.startswith(parent + "/") for parent in roots):
+            roots.append(name)
+    for name in roots:
+        if conflicts[name].startswith("File/directory"):
+            candidate = replace_family(candidate, name, family(local, name))
+    return [{"path": name, "reason": conflicts[name]} for name in roots], candidate
+
+
 def refuse_git_metadata(path: Path) -> None:
     if any(part.name == ".git" for part in path.rglob(".git")):
         raise KeeperError("Git metadata is not supported in merge candidates")
@@ -192,21 +212,7 @@ class Plans:
         for tree, key in ((base, "baselineHash"), (local, "localHash"), (upstream, "upstreamHash")):
             if tree_hash(tree) != report[key]:
                 raise KeeperError("Merge inputs changed while preparing; try again")
-        conflicts = {change["path"]: change["reason"] for change in report["changes"] if change["conflict"]}
-        # A candidate cannot physically contain both `file` and `file/child`.
-        # Keep the local family for this group and require an explicit choice.
-        for name in list(candidate):
-            for parent in PurePosixPath(name).parents:
-                root = str(parent)
-                if root in candidate:
-                    conflicts[root] = "File/directory collision. Choose the complete path from one side."
-        roots = []
-        for name in sorted(conflicts, key=lambda item: (len(PurePosixPath(item).parts), item)):
-            if not any(name.startswith(parent + "/") for parent in roots):
-                roots.append(name)
-        for name in roots:
-            if conflicts[name].startswith("File/directory"):
-                candidate = replace_family(candidate, name, family(local, name))
+        conflicts, candidate = conflict_groups(report["changes"], candidate, local)
         # Preparing again replaces untouched reviews of the same inputs.
         self.discard_duplicates(clone_id, {key: report[key] for key in ("baselineHash", "localHash", "upstreamHash")})
         plan_id = uuid.uuid4().hex
@@ -217,15 +223,18 @@ class Plans:
                   "upstreamHash": report["upstreamHash"], "candidateHash": tree_hash(candidate),
                   "baseVersion": report["baseVersion"], "upstreamVersion": report["upstreamVersion"],
                   "identity": meta["identity"],
-                  "conflicts": [{"path": name, "reason": conflicts[name]} for name in roots]}
-        output = keeper.protect_destination(self.path(plan_id), state=True)
+                  "conflicts": conflicts}
+        self.store(plan_id, record, base, local, upstream, candidate)
+        return self.review(plan_id)
+
+    def store(self, plan_id: str, record: dict, base: Tree, local: Tree, upstream: Tree, candidate: Tree) -> None:
+        output = self.keeper.protect_destination(self.path(plan_id), state=True)
         contents = {"record.json": File(json_bytes(record), 0o600),
                     "resolutions.json": File(json_bytes({}), 0o600)}
         for name, tree in (("base", base), ("local", local), ("upstream", upstream), ("candidate", candidate)):
             contents.update({f"{name}/{file}": blob for file, blob in tree.items()})
-        keeper.state_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+        self.keeper.state_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
         atomic_new_tree(output, contents)
-        return self.review(plan_id)
 
     def review(self, plan_id: str) -> dict:
         record, trees = self.load(plan_id)
@@ -240,7 +249,8 @@ class Plans:
                               "resolution": resolution.get("take") if resolved else None,
                               "blocks": [] if resolved else describe_blocks(candidate.get(path))})
         markers = marker_files(candidate)
-        errors = validate_candidate(candidate, record["cloneId"], record["sourceId"])
+        git_plugin = record.get("kind") == "git"
+        errors = validate_candidate(candidate, record["cloneId"], None if git_plugin else record["sourceId"])
         if markers:
             errors.append("Unresolved conflict markers in: " + ", ".join(markers))
         from .validation import check_manifest, check_qml
@@ -261,19 +271,10 @@ class Plans:
                             "diff": file_diff(path, ours, proposed),
                             "localDiff": file_diff(path, original, ours),
                             "upstreamDiff": file_diff(path, original, theirs)})
-        stale = []
         try:
-            _, live, _, source_id = self.keeper.clone(record["cloneId"])
-            meta, _ = self.keeper.load_baseline(record["cloneId"])
-            source = self.keeper.sources().get(source_id)
-            if tree_hash(live) != record["localHash"]:
-                stale.append("Your clone changed after this plan was prepared.")
-            if meta["baselineHash"] != record["baselineHash"]:
-                stale.append("The baseline changed after this plan was prepared.")
-            if source is None or tree_hash(as_clone(source.materialize(), record["identity"], record["sourceId"])) != record["upstreamHash"]:
-                stale.append("Upstream changed after this plan was prepared.")
+            stale = self._stale(record)
         except (KeeperError, OSError, KeyError, TypeError, ValueError) as exc:
-            stale.append(str(exc))
+            stale = [str(exc)]
         unresolved_count = sum(not item["resolved"] for item in conflicts)
         return {"schemaVersion": 1, "planId": plan_id, "cloneId": record["cloneId"],
                 "sourceId": record["sourceId"], "baseVersion": record["baseVersion"],
@@ -285,6 +286,24 @@ class Plans:
                 "validation": {"valid": not errors, "errors": errors, "syntax": syntax},
                 "stale": bool(stale), "staleReasons": stale,
                 "editablePath": str(self.path(plan_id) / "candidate")}
+
+    def _stale(self, record: dict) -> list[str]:
+        """Why a plan's inputs no longer match the installed plugin, its baseline or upstream."""
+        if record.get("kind") == "git":
+            from .gitplugins import GitPlugins
+            from .service import Workflow
+            return GitPlugins(Workflow(self.keeper)).stale(record)
+        stale = []
+        _, live, _, source_id = self.keeper.clone(record["cloneId"])
+        meta, _ = self.keeper.load_baseline(record["cloneId"])
+        source = self.keeper.sources().get(source_id)
+        if tree_hash(live) != record["localHash"]:
+            stale.append("Your clone changed after this plan was prepared.")
+        if meta["baselineHash"] != record["baselineHash"]:
+            stale.append("The baseline changed after this plan was prepared.")
+        if source is None or tree_hash(as_clone(source.materialize(), record["identity"], record["sourceId"])) != record["upstreamHash"]:
+            stale.append("Upstream changed after this plan was prepared.")
+        return stale
 
     def discard(self, clone_id: str, obsolete) -> list[str]:
         """Remove a clone's saved plans for which obsolete(record, root) is true.
