@@ -2,12 +2,13 @@
 
 ## Current status
 
-0.4.0 is a local beta with the full maintenance workflow. No GitHub repository,
-release tag or marketplace issue has been created by this development workflow.
-The proposed public repository is neilofneils404/clone-keeper. The installed plugin
-ID remains neil.clone-keeper; check catalog uniqueness before publication.
-A nested desktop pilot ran on 2026-09-27; its results and open findings are in
-[validation](VALIDATION.md).
+0.4.0 is a beta with the full maintenance workflow, published on 2026-10-17 at
+https://github.com/neilofneils404/clone-keeper with the v0.4.0 pre-release. A clean
+install of the published repository with `omarchy plugin add` passed the Omarchy
+validator and the full test suite, and CI passed. The plugin ID neil.clone-keeper
+was checked against the marketplace registry and is unused. Nested desktop pilots
+ran on 2026-09-27 and 2026-10-17; see [validation](VALIDATION.md). Marketplace
+submission and the upstream change below are tracked separately.
 
 ## Final desktop pilot
 
