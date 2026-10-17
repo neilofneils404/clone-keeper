@@ -251,7 +251,8 @@ class Workflow:
                 raise KeeperError(f"Unknown built-in source: {source_id}")
             original = source.materialize()
             name = "My " + manifest(original).get("name", source_id)
-            identity = {"id": clone_id, "name": name, "displayName": name}
+            identity = {"id": clone_id, "name": name, "displayName": name,
+                        "clonedFromVersion": self.keeper.version()}
             baseline = as_clone(original, identity, source_id)
             errors = validate_candidate(baseline, clone_id, source_id)
             if errors:

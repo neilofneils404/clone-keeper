@@ -74,7 +74,11 @@ members, into private scratch directories. Releases are materialized with the
 current clone rules, which match Omarchy 4.x.
 - applied-plan: a reviewed apply advances the ancestor to that plan's upstream.
 
-Version labels and modification times never establish ancestry. Repeated tracking
+Version labels and modification times never establish ancestry by themselves.
+Clones may carry omarchy.clonedFromVersion, the release Omarchy's clone command
+(and Clone Keeper's) copied them from. It is part of the clone's identity, like
+its ID and clonedFrom, and origin searches use it in place of pacman's log to
+rank candidates; the owner still confirms the original. Repeated tracking
 refuses to replace an existing record.
 
 Creation saves a verified baseline with creationPending=true, then publishes the

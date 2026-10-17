@@ -7,6 +7,8 @@
   `origins` ranks them using pacman's log and the files that still match;
   `track --origin VERSION --expect HASH` records the confirmed one with its evidence.
 - The panel searches automatically for an untracked clone and offers the best match.
+- Clones record `omarchy.clonedFromVersion`; origin searches prefer it to pacman's
+  log, and it is treated as clone identity rather than an edit.
 - `sync` runs whenever the panel loads: it keeps each running release's built-in
   sources so they survive upgrades, and tracks clones identical to a recorded
   release, including clones made from Omarchy's own menu.

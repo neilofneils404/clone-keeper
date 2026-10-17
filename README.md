@@ -54,9 +54,11 @@ tooltip says whether the update merges cleanly, and a notification tells you onc
 Turn notifications off with the widget's **Update notifications** setting.
 For the live plugin directory it also shows whether each clone is enabled in Omarchy.
 
-![Reviewing a proposed upstream change](docs/images/review.png)
+![Choosing for each overlapping change](docs/images/review.png)
 
-Actual panel content in a disposable synthetic fixture. This capture demonstrates
+![An existing clone's original found among installed releases](docs/images/origin.png)
+
+Actual panel content in a disposable synthetic fixture. These captures demonstrate
 the interface. Native installation and popup behavior were checked in a nested
 desktop pilot; see [validation](docs/VALIDATION.md) for its findings.
 
@@ -70,7 +72,13 @@ reviews report when it is unavailable. No Python packages or sudo are needed.
 Apply/undo require filesystem support for Linux `renameat2(RENAME_EXCHANGE)`;
 creation uses `RENAME_NOREPLACE`. Unsupported layouts fail before live replacement.
 
-Run directly from this checkout:
+Install with Omarchy's plugin installer:
+
+```bash
+omarchy plugin add https://github.com/neilofneils404/clone-keeper --enable
+```
+
+Or run directly from a checkout:
 
 ```bash
 ./bin/clone-keeper --help
@@ -78,7 +86,7 @@ Run directly from this checkout:
 python scripts/demo.py
 ```
 
-To install the **committed** local checkout with Omarchy's normal installer:
+To install a **committed** local checkout instead:
 
 ```bash
 omarchy plugin add /absolute/path/to/clone-keeper --enable
@@ -88,7 +96,7 @@ The plugin ID is `neil.clone-keeper`. Keep the entire repository together: the
 panel calls its bundled `bin/clone-keeper` and `clone_keeper/` module. The installer
 copies committed Git files; uncommitted development edits are not included.
 The installed CLI is `~/.config/omarchy/plugins/neil.clone-keeper/bin/clone-keeper`.
-Public installation instructions will use the GitHub URL once published.
+Update it with `omarchy plugin update neil.clone-keeper`.
 
 Remove through Omarchy:
 

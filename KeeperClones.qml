@@ -188,7 +188,9 @@ Column {
               var item = originCard.candidate
               if (!item) return ""
               var lines = []
-              if (item.timelineMatch) lines.push("This release was installed when the clone was created.")
+              if (item.timelineMatch) lines.push(originCard.origins && originCard.origins.versionSource === "manifest"
+                ? "The clone records that it was made from this release."
+                : "This release was installed when the clone was created.")
               lines.push(item.unchangedFiles + " of " + item.files + " files still match it exactly.")
               if (item.changedFiles.length > 0)
                 lines.push("Your changes: " + item.changedFiles.slice(0, 4).join(", ")

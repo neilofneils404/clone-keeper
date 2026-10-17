@@ -288,7 +288,10 @@ class Origins:
         identity = clone_identity(value)
         timeline = pacman_timeline(self.pacman_log)
         created = birth_time(path)
-        expected = version_at(timeline, created) if created and timeline else None
+        # Omarchy can record the release a clone came from; prefer it to pacman's log.
+        info = value.get("omarchy") if isinstance(value.get("omarchy"), dict) else {}
+        recorded = info.get("clonedFromVersion") if isinstance(info.get("clonedFromVersion"), str) else None
+        expected = recorded or (version_at(timeline, created) if created and timeline else None)
         groups, trees, problems = {}, {}, []
         for releases, original in self._originals(source_id, extra, packages, problems):
             try:
@@ -314,11 +317,12 @@ class Origins:
             candidates[0]["suggested"] = True
         if expected and not any(item["timelineMatch"] for item in candidates):
             problems.append({"path": str(self.package_cache),
-                             "message": f"Omarchy {expected} was installed when this clone was created, but its "
-                                        "source is not available here. Supply that release's tree or package."})
+                             "message": f"This clone was made from Omarchy {expected}, but that release's source "
+                                        "is not available here. Supply its tree or package."})
         return ({"cloneId": clone_id, "sourceId": source_id, "clonePath": str(path),
                  "cloneCreatedAt": created.isoformat() if created else None,
-                 "installedAtCreation": expected, "candidates": candidates, "errors": problems}, trees)
+                 "installedAtCreation": expected, "versionSource": "manifest" if recorded else "pacman-log" if expected else None,
+                 "candidates": candidates, "errors": problems}, trees)
 
     def exact(self, clone_id: str):
         """A recorded release this clone is byte-identical to, without reading packages.
@@ -343,6 +347,7 @@ class Origins:
             raise KeeperError("That release's source no longer matches the reviewed candidate; look again")
         evidence = {"versions": chosen["versions"], "releases": chosen["releases"],
                     "cloneCreatedAt": found["cloneCreatedAt"], "installedAtCreation": found["installedAtCreation"],
+                    "versionSource": found["versionSource"],
                     "timelineMatch": chosen["timelineMatch"], "unchangedFiles": chosen["unchangedFiles"],
                     "changedFiles": chosen["changedFiles"]}
         return trees[chosen["baselineHash"]], evidence

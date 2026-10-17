@@ -106,6 +106,18 @@ class OriginTests(unittest.TestCase):
         self.assertEqual(supplied["releases"][0]["kind"], "supplied")
         self.assertEqual(supplied["changedLines"], 2)
 
+    def test_recorded_clone_version_outranks_creation_time(self):
+        # A newer clone command records the source release in the manifest.
+        manifest_path = self.clone / "manifest.json"
+        value = test_cli.json.loads(manifest_path.read_text())
+        value["omarchy"]["clonedFromVersion"] = "4.0.0-1"
+        manifest_path.write_text(test_cli.json.dumps(value))
+        self.write_log([])
+        found = self.origins()
+        self.assertEqual((found["installedAtCreation"], found["versionSource"]), ("4.0.0-1", "manifest"))
+        self.assertTrue(found["candidates"][0]["timelineMatch"])
+        self.assertTrue(found["candidates"][0].get("suggested"))
+
     def test_rejects_unreadable_search_paths(self):
         self.origins("--search", self.root / "missing", success=False)
 
@@ -188,6 +200,17 @@ class SyncTests(unittest.TestCase):
         result = self.cli("sync")
         self.assertEqual(result["tracked"], [])
         self.assertTrue(any("integrity" in error["message"] for error in result["errors"]), result)
+
+    def test_recorded_clone_version_is_not_an_edit(self):
+        manifest_path = self.clone / "manifest.json"
+        value = test_cli.json.loads(manifest_path.read_text())
+        value["omarchy"]["clonedFromVersion"] = "4.0.1"
+        manifest_path.write_text(test_cli.json.dumps(value))
+        self.assertEqual(self.cli("sync")["tracked"], [CLONE_ID])
+        self.upgrade("4.0.2")
+        preview = self.preview()
+        self.assertEqual([change["path"] for change in preview["changes"]], ["BarWidget.qml"])
+        self.assertIn('"clonedFromVersion"', (self.clone / "manifest.json").read_text())
 
     def test_concurrent_sync_is_skipped(self):
         import fcntl, os

@@ -144,9 +144,12 @@ def human(result, command):
     elif command == "dismiss":
         print(f"Dismissed {len(result['dismissed'])} recorded operation(s).")
     elif command == "origins":
-        when = result["cloneCreatedAt"] or "an unrecorded time"
-        print(f"{result['cloneId']} was created {when}"
-              + (f", while Omarchy {result['installedAtCreation']} was installed." if result["installedAtCreation"] else "."))
+        if result["versionSource"] == "manifest":
+            print(f"{result['cloneId']} records that it was cloned from Omarchy {result['installedAtCreation']}.")
+        else:
+            when = result["cloneCreatedAt"] or "an unrecorded time"
+            print(f"{result['cloneId']} was created {when}"
+                  + (f", while Omarchy {result['installedAtCreation']} was installed." if result["installedAtCreation"] else "."))
         if not result["candidates"]:
             print("No release on this machine contains its source.")
         for item in result["candidates"]:

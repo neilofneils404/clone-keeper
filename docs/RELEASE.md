@@ -41,23 +41,29 @@ popup, compositor, and installation lifecycle checks. Record findings in VALIDAT
 6. Review and submit the marketplace issue below; track its outcome rather than
    equating submission with approval.
 
-Current guidance was checked on 2026-09-22:
+Current guidance was checked on 2026-10-17:
 [Submission guide](https://github.com/omacom/omarchy-plugin-marketplace/blob/main/SUBMISSION.md)
 and [security model](https://github.com/omacom/omarchy-plugin-marketplace/blob/main/SECURITY.md).
-The catalog requires a public GitHub repository, one root manifest, license and
-dependency documentation, installation/removal instructions and a unique ID.
-The proposed category is System, with tags system and quickshell.
-An optional preview must meet the guide's current image limits.
+The marketplace is published at https://plugins.omarchy.org (moved there on
+2026-08-30). It requires a public GitHub repository root, one root manifest, a root
+README with installation and removal, a root license, documented dependencies and a
+globally unique, permanent ID; `neil.clone-keeper` matches the owner's existing
+`neil.*` listings and is unused. An optional root `preview.png` is processed by the
+marketplace. Submissions get compatibility validation and an automated static
+security baseline on the exact commit, then maintainer approval
+(`approved-and-verified`). Neither is a security review. Updates to a listing go
+through the Plugin verification issue form with the new full commit SHA.
 
-## Marketplace issue draft
+## Marketplace issue
 
-Target: omacom/omarchy-plugin-marketplace  
+Target: omacom/omarchy-plugin-marketplace
 Title: [Plugin]: Clone Keeper
 
-The URL below is proposed, not currently live. Check each statement against the
-published repository before submitting; the owner must attest to ownership and
-submission rights. The blank checklist is intentional until that review.
+The body follows SUBMISSION.md exactly: six headings in order, one category, one to
+three allowed tags, and the five checklist statements, checked only after the owner
+confirms each one.
 
+```markdown
 ### Repository URL
 
 https://github.com/neilofneils404/clone-keeper
@@ -76,20 +82,11 @@ _No response_
 
 ### Maintainer notes
 
-Clone Keeper maintains customized copies of Omarchy built-in plugins. It records
-their original source, prepares persistent three-way reviews, supports explicit
-conflict resolution, and applies the reviewed result with backups, undo and crash
-recovery. New clones are disabled until explicitly enabled.
+Clone Keeper keeps customized copies of Omarchy built-in plugins up to date. It records each clone's original source, merges newer built-ins with the owner's edits in a reviewed three-way merge with per-conflict choices, and applies the confirmed result atomically with backups, undo and crash recovery. It can find an existing clone's original among Omarchy releases on the machine (installed tree, pacman cache), and it also updates git-installed plugins the owner has edited, which `omarchy plugin update` refuses.
 
-The root manifest declares one bar widget. The bundled Python CLI requires Linux,
-Python 3.11+ and Git; Qt 6 qmllint is optional for candidate syntax checking.
-There are no Python runtime packages, network requests or privileged operations.
-Apply and undo affect only the selected clone and its own recorded state.
-Activation uses supported Omarchy shell IPC after an explicit action.
-Backups and saved reviews stay local and are retained until deliberately removed.
+The root manifest declares one bar widget. A bundled Python CLI needs Linux, Python 3.11+ and Git; Qt 6 qmllint is optional. No Python packages, sudo or background network access. Its only network request is `git fetch origin HEAD` for an edited git-installed plugin, when the owner chooses Check for updates. It never executes plugin code itself; after an apply to an enabled clone it restarts the shell through omarchy-restart-shell, reads the shell log and undoes the update if the clone failed to load. Optional hand-offs open the owner's editor or default coding agent on request. State, backups and saved reviews stay local until pruned on request.
 
-License: MIT. Independent community project. See README and docs/VALIDATION.md for
-installation, removal, exact tested behavior and current limitations.
+License: MIT. Independent community project. Tested on Omarchy 4.0.4; see README and docs/VALIDATION.md for exact tested behavior and limits.
 
 ### Submission checklist
 
@@ -98,3 +95,10 @@ installation, removal, exact tested behavior and current limitations.
 - [ ] I confirm that I own or have permission to submit this plugin and its preview assets.
 - [ ] The plugin does not overwrite user configuration without explicit consent.
 - [ ] I understand that approval is for listing and is not a security review.
+```
+
+## Upstream contribution
+
+A proposed change to basecamp/omarchy makes `omarchy plugin clone` record
+`omarchy.clonedFromVersion`, the Omarchy release a clone was copied from. Clone
+Keeper already reads it as clone identity and as origin evidence.

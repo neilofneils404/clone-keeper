@@ -288,6 +288,10 @@ def clone_identity(value: dict) -> dict:
     identity = {"id": value["id"], "name": value.get("name", value["id"])}
     if isinstance(value.get("barWidget"), dict) and "displayName" in value["barWidget"]:
         identity["displayName"] = value["barWidget"]["displayName"]
+    # Recorded by Omarchy's clone command: part of the clone, not an edit to it.
+    info = value.get("omarchy")
+    if isinstance(info, dict) and isinstance(info.get("clonedFromVersion"), str):
+        identity["clonedFromVersion"] = info["clonedFromVersion"]
     return identity
 
 
@@ -303,6 +307,8 @@ def as_clone(source: Tree, identity: dict, source_id: str) -> Tree:
     if not isinstance(value.get("omarchy"), dict):
         value["omarchy"] = {}
     value["omarchy"]["clonedFrom"] = source_id
+    if "clonedFromVersion" in identity:
+        value["omarchy"]["clonedFromVersion"] = identity["clonedFromVersion"]
     value["omarchy"].pop("clonePaths", None)
     result["manifest.json"] = File(json_bytes(value), result["manifest.json"].mode)
     return result
