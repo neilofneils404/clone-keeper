@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import qs.Commons
+import qs.Commons as Commons
 import qs.Ui as Ui
 
 Column {
@@ -57,7 +58,7 @@ Column {
         muted: true
         text: "Transaction " + String(parent.modelData.id || "")
       }
-      Rectangle { width: parent.width; height: 1; color: Util.alpha(Color.foreground, 0.12) }
+      Rectangle { width: parent.width; height: 1; color: Util.alpha(Commons.Color.foreground, 0.12) }
     }
   }
 }

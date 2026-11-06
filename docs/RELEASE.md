@@ -2,6 +2,10 @@
 
 ## Current status
 
+0.4.1 is the Omarchy 4.5 / Qt 6.12 compatibility update to the public beta.
+The complete local checks are recorded in [validation](VALIDATION.md).
+
+
 0.4.0 is a beta with the full maintenance workflow, published on 2026-10-17 at
 https://github.com/neilofneils404/clone-keeper with the v0.4.0 pre-release. A clean
 install of the published repository with `omarchy plugin add` passed the Omarchy

@@ -126,6 +126,7 @@ def main():
 import QtQuick
 import Quickshell
 import qs.Commons
+import qs.Commons as Commons
 import "plugin" as Keeper
 
 ShellRoot {
@@ -142,12 +143,12 @@ ShellRoot {
     visible: true
     implicitWidth: 620
     implicitHeight: 700
-    color: Color.background
+    color: Commons.Color.background
     Rectangle {
       id: frame
       anchors.fill: parent
       anchors.margins: 16
-      color: Color.background
+      color: Commons.Color.background
       Keeper.KeeperView { anchors.fill: parent; keeper: keeper }
     }
   }

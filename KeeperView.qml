@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls as Controls
 import qs.Commons
+import qs.Commons as Commons
 import qs.Ui as Ui
 
 Item {
@@ -145,7 +146,7 @@ Item {
           width: parent.width
           visible: root.keeper.notice !== ""
           text: root.keeper.notice
-          color: Color.accent
+          color: Commons.Color.accent
         }
         Column {
           width: parent.width

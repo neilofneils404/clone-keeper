@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.1 — beta, 2026-11-06
+
+- Fix theme colors on Qt 6.12 by qualifying the Omarchy Color singleton.
+- Update the UI smoke harness to use the same unambiguous imports.
+- Validate against Omarchy 4.5.0-3 and refresh release documentation.
+
 ## 0.4.0 — local beta, 2026-10-17
 
 - Find an existing clone's original among Omarchy releases on this machine:

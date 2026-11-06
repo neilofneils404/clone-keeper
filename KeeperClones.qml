@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls as Controls
 import qs.Commons
+import qs.Commons as Commons
 import qs.Ui as Ui
 
 Column {
@@ -40,10 +41,10 @@ Column {
       width: cloneList.width - Style.space(8)
       height: rowContent.implicitHeight + Style.space(18)
       radius: Style.cornerRadius
-      color: rowMouse.containsMouse || activeFocus ? Util.alpha(Color.foreground, 0.08)
-        : (root.keeper.selectedId === modelData.id ? Util.alpha(Color.accent, 0.08) : "transparent")
+      color: rowMouse.containsMouse || activeFocus ? Util.alpha(Commons.Color.foreground, 0.08)
+        : (root.keeper.selectedId === modelData.id ? Util.alpha(Commons.Color.accent, 0.08) : "transparent")
       border.width: root.keeper.selectedId === modelData.id || activeFocus ? 1 : 0
-      border.color: activeFocus ? Color.foreground : Util.alpha(Color.accent, 0.45)
+      border.color: activeFocus ? Commons.Color.foreground : Util.alpha(Commons.Color.accent, 0.45)
       activeFocusOnTab: true
       enabled: !root.keeper.busy
       Accessible.role: Accessible.Button
@@ -164,9 +165,9 @@ Column {
         visible: !!parent.suggested
         height: originContent.implicitHeight + Style.space(20)
         radius: Style.cornerRadius
-        color: Util.alpha(Color.accent, 0.08)
+        color: Util.alpha(Commons.Color.accent, 0.08)
         border.width: 1
-        border.color: Util.alpha(Color.accent, 0.45)
+        border.color: Util.alpha(Commons.Color.accent, 0.45)
         readonly property var candidate: parent.suggested
         readonly property var origins: parent.origins
         Column {

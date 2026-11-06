@@ -1,5 +1,17 @@
 # Validation
 
+## Omarchy 4.5 compatibility update (0.4.1, 2026-11-06)
+
+Validated on Omarchy 4.5.0-3, Qt 6.12.0 and Hyprland 0.56.2. All 195 Python
+tests, the CLI demo, host-aware QML lint, and `scripts/smoke-ui.py --native-load`
+pass. The existing UI smoke reproduced undefined color warnings before the fix
+and passes after explicit `Commons.Color` imports in the plugin and harness.
+Lint retains dynamic-property/style warnings. The smoke exercises disposable
+clones and a separate hidden native panel; it does not replace physical device,
+multi-monitor or full shell-restart testing. No maintenance-engine behavior changed.
+
+The sections below preserve results from earlier versions.
+
 Recorded on 2026-09-22 for the 0.2.0 local beta, rerun on 2026-09-27 for the
 0.3.0 local beta, and on 2026-10-17 for the 0.4.0 local beta.
 
@@ -52,11 +64,11 @@ Recorded on 2026-09-22 for the 0.2.0 local beta, rerun on 2026-09-27 for the
 
 - The project metadata, plugin manifest, Python module and CLI consistently report
   version **0.4.0**; the Python package requires Python 3.11 or newer.
-- A fresh source archive includes the native QML and manifest, bundled launcher,
+- Historical 0.3.0 packaging check: a fresh source archive includes the native QML and manifest, bundled launcher,
   Python modules, complete tests, scripts, documentation/images and CI configuration.
   After unpacking that archive, **all 137 tests pass on Python 3.14.7 with no skips**;
   the executable launcher reports `Clone Keeper 0.3.0`, and the full demo passes.
-- The Python wheel contains the CLI and its modules. Building it and installing it
+- The earlier Python wheel contains the CLI and its modules. Building it and installing it
   in an isolated Python 3.11.16 environment passes the console version/help checks.
   Temporary runtimes, installations and build artifacts were removed afterward.
 

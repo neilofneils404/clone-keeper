@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls as Controls
 import qs.Commons
+import qs.Commons as Commons
 import qs.Ui as Ui
 
 Column {
@@ -179,12 +180,12 @@ Column {
         wrapMode: TextEdit.NoWrap
         font.family: "monospace"
         font.pixelSize: Style.font.bodySmall
-        color: Color.foreground
-        selectionColor: Color.accent
-        selectedTextColor: Color.background
+        color: Commons.Color.foreground
+        selectionColor: Commons.Color.accent
+        selectedTextColor: Commons.Color.background
         padding: Style.space(8)
         textFormat: TextEdit.PlainText
-        background: Rectangle { color: Util.alpha(Color.foreground, 0.04) }
+        background: Rectangle { color: Util.alpha(Commons.Color.foreground, 0.04) }
         Accessible.name: "File comparison"
         onTextChanged: { diffScroll.contentX = 0; diffScroll.contentY = 0 }
       }
@@ -219,9 +220,9 @@ Column {
           width: parent.width
           height: blockContent.implicitHeight + Style.space(16)
           radius: Style.cornerRadius
-          color: Util.alpha(Color.foreground, 0.04)
+          color: Util.alpha(Commons.Color.foreground, 0.04)
           border.width: 1
-          border.color: Util.alpha(Color.urgent, 0.4)
+          border.color: Util.alpha(Commons.Color.urgent, 0.4)
           Column {
             id: blockContent
             x: Style.space(8)
@@ -246,7 +247,7 @@ Column {
                 Text {
                   width: parent.width
                   text: String(side.modelData.text).replace(/\n$/, "") || "(nothing)"
-                  color: Color.foreground
+                  color: Commons.Color.foreground
                   font.family: "monospace"
                   font.pixelSize: Style.font.bodySmall
                   wrapMode: Text.WrapAnywhere
